@@ -77,6 +77,7 @@ python -m app.main --skip-checks       # skip the startup self-check
 | Q / Esc   | Quit                            |
 | B         | Beep on every blink ON/OFF      |
 | A         | Low-rate alert ON/OFF           |
+| S         | Look-angle sweep (workspace extrema) |
 | T         | Always-on-top ON/OFF            |
 
 ---

@@ -97,8 +97,53 @@ face plane from outer eye corners + forehead + chin, takes the outward normal
 * **0°** → axes parallel → looking straight into the camera  
 * **yaw / pitch** → direction label: `straight`, `left`, `right`, `top`,
   `bottom`, or combinations like `right-top`  
+* Left/right are from the **user's** perspective (`FACE_YAW_SIGN = −1`)
 * Published on `EngineSnapshot` and shown in the **Look angle** metric card
   beside Regularity
+
+### Look-angle sweep (workspace extrema)
+
+The **Sweep** control (replaces the old On-top button in the footer) opens a
+full-screen overlay similar to Practice:
+
+1. User toggles **Sweep** → engine enters `sweep_phase = active`.
+2. Each face frame updates the **max** `face_angle_deg` in the matching
+   45° sector: four corners (`tl` / `tr` / `bl` / `br`) **and** four
+   edges (`t` / `b` / `l` / `r`).
+3. Near-straight looks (`|yaw|` and `|pitch|` both &lt; 3°) are ignored so
+   the primary-screen centre does not seed an extreme.
+4. **Finish** freezes the eight values (`sweep_phase = summary`).
+5. **Close** from the summary **registers** those eight as `look_*_deg`
+   (persisted in preferences) and shows them on the Look angle card.
+   Cancel / Esc during capture does not overwrite saved limits.
+
+Classification lives in `app.engine.assign_sweep_sector`. Overlay:
+`frontend/src/components/SweepScreen.tsx`. On a multi-monitor desktop the
+main window covers its display and extra pywebview windows (`?sweepOverlay=1`)
+cover every other attached screen (`place=left|right|above|below` from
+OS layout). Those extra screens show **look-here** targets only — the
+red/green compass is always **your face direction** (camera-relative),
+so the left edge of a monitor on your right does not pretend to be
+“left”. Always-on-top remains available via the hidden **T** shortcut.
+
+### Off-screen (beyond saved limits)
+
+Once limits are registered, a look past the saved extreme **in that
+sector** (plus a little hysteresis) sets `off_screen`:
+
+* Camera status pill shows **Off-screen** (instead of Eyes open / closed)
+* Blink is discarded (not counted, no beep, no regularity / research gap)
+* Alerts and screen-time treat it like no-face
+* Camera FPS stays on the face path so pose can detect the return
+
+No saved limits → never off-screen. Disabled during an active sweep.
+
+Alert beeps only if the **current** rate is a genuine low (0 < BPM < 10)
+**and** there have been **≥ 2 minutes** of such low-rate time in the last
+**5 minutes**. Zeros and off-screen / no-face gaps are excluded. While
+away the 60s rate window is **paused** (it does not decay toward 0) and
+Trace **breaks the line** for that stretch — time still scrolls. Beeps
+stop as soon as the current rate recovers.
 
 ---
 
@@ -171,7 +216,9 @@ Tunables in `app/engine.py`: `PRACTICE_COUNTDOWN_S`, `PRACTICE_INTERVAL_S`,
 |-----|--------|
 | B | Toggle beep on each counted blink |
 | A | Toggle low-rate alert |
-| T | Toggle always-on-top (desktop window) |
+| S | Toggle look-angle sweep (workspace extrema) |
+| P | Toggle practice coach |
+| T | Toggle always-on-top (desktop window; no footer button) |
 | C | Expand / collapse camera panel |
 
 ---

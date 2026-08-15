@@ -21,7 +21,8 @@ A compact **React dashboard** (not full-screen by default):
 | **Screen time** | How long a face has been in front of the screen today |
 | **FPS** | Camera pipeline throughput |
 | **Regularity** | How steady your inter-blink gaps are (0–100) |
-| **Reserved cards** | Placeholders for future metrics |
+| **Look angle** | Face/eye axis vs camera (0° = looking straight in) |
+| **Sweep** | Capture eight extreme look angles (4 corners + 4 edges) |
 | **Camera panel** | Collapsed by default; expand when you want a preview |
 
 Regularity is computed as:
@@ -82,6 +83,7 @@ Open the Vite URL (proxies `/api` and `/ws` to the Python server).
 |-----|--------|
 | **B** | Toggle beep on every counted blink |
 | **A** | Toggle low-rate alert (beeps while rate is very low) |
+| **S** | Toggle look-angle sweep (eight extreme look angles) |
 | **T** | Toggle always-on-top (desktop window) |
 | **C** | Expand / collapse camera preview |
 

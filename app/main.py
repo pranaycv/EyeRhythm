@@ -44,14 +44,20 @@ class _WindowApi:
     JS bridge methods exposed to the React UI via ``window.pywebview.api``.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, ui_url: str = "") -> None:
         self._window = None
+        self._ui_url = ui_url.rstrip("/") + "/"
         self._practice_fullscreen = False
         self._used_native_fullscreen = False
         self._pre_practice_geometry: tuple[int, int] | None = None
+        self._sweep_overlays: list = []
+        self._sweep_overlays_on = False
 
     def bind(self, window) -> None:
         self._window = window
+
+    def set_ui_url(self, url: str) -> None:
+        self._ui_url = str(url).rstrip("/") + "/"
 
     def set_camera_layout(self, expanded: bool) -> None:
         # No-op: Lens avatar replaces the expandable camera panel.
@@ -106,6 +112,157 @@ class _WindowApi:
                 self._practice_fullscreen = False
         except Exception as exc:
             _log(f"practice fullscreen toggle failed: {exc}")
+
+    def set_sweep_overlays(self, enabled: bool) -> None:
+        """
+        Open a fullscreen sweep dialog on every attached display.
+
+        The main window already covers the display it sits on; extra
+        frameless windows cover the remaining screens so the user can
+        look at each monitor's corners / edges.
+        """
+        want = bool(enabled)
+        if want == self._sweep_overlays_on and (want is False or self._sweep_overlays):
+            if want:
+                return
+        if not want:
+            self._close_sweep_overlays()
+            return
+        self._open_sweep_overlays()
+
+    def _open_sweep_overlays(self) -> None:
+        self._close_sweep_overlays()
+        try:
+            import webview
+        except ImportError:
+            return
+        try:
+            screens = list(webview.screens or [])
+        except Exception as exc:
+            _log(f"could not list displays for sweep: {exc}")
+            return
+        if len(screens) <= 1:
+            self._sweep_overlays_on = True
+            _log("sweep overlays: single display — main window only")
+            return
+
+        main_screen = _screen_for_window(self._window, screens)
+        created = 0
+        for screen in screens:
+            if main_screen is not None and _same_screen(screen, main_screen):
+                continue
+            place = _place_vs_main(screen, main_screen)
+            overlay_url = f"{self._ui_url}?sweepOverlay=1&place={place}"
+            try:
+                win = webview.create_window(
+                    "EyeRhythm Sweep",
+                    overlay_url,
+                    screen=screen,
+                    width=int(getattr(screen, "width", 800) or 800),
+                    height=int(getattr(screen, "height", 600) or 600),
+                    fullscreen=True,
+                    frameless=True,
+                    easy_drag=False,
+                    on_top=True,
+                    focus=False,
+                    resizable=False,
+                    confirm_close=False,
+                    background_color="#2B2E33",
+                )
+                if win is not None:
+                    self._sweep_overlays.append(win)
+                    created += 1
+            except Exception as exc:
+                _log(f"sweep overlay on {screen} failed: {exc}")
+        self._sweep_overlays_on = True
+        _log(f"sweep overlays: {created} extra display(s) of {len(screens)}")
+
+    def _close_sweep_overlays(self) -> None:
+        for win in list(self._sweep_overlays):
+            try:
+                win.destroy()
+            except Exception:
+                try:
+                    win.hide()
+                except Exception:
+                    pass
+        self._sweep_overlays.clear()
+        self._sweep_overlays_on = False
+
+
+def _place_vs_main(screen, main) -> str:
+    """
+    Which side of the main/camera display this screen sits on.
+
+    Left/right use x (same on every OS). Above/below flips on macOS
+    because Cocoa screen y grows upward.
+    """
+    if main is None:
+        return "other"
+    try:
+        scx = float(screen.x) + float(screen.width) / 2.0
+        scy = float(screen.y) + float(screen.height) / 2.0
+        mcx = float(main.x) + float(main.width) / 2.0
+        mcy = float(main.y) + float(main.height) / 2.0
+    except Exception:
+        return "other"
+    dx = scx - mcx
+    dy = scy - mcy
+    if abs(dx) < 8 and abs(dy) < 8:
+        return "other"
+    if abs(dx) >= abs(dy):
+        return "right" if dx > 0 else "left"
+    # Windows / most platforms: y grows down. Cocoa: y grows up.
+    if sys.platform == "darwin":
+        return "above" if dy > 0 else "below"
+    return "below" if dy > 0 else "above"
+
+
+def _same_screen(a, b) -> bool:
+    if a is b:
+        return True
+    try:
+        return (
+            int(a.x) == int(b.x)
+            and int(a.y) == int(b.y)
+            and int(a.width) == int(b.width)
+            and int(a.height) == int(b.height)
+        )
+    except Exception:
+        return False
+
+
+def _screen_for_window(window, screens: list):
+    """Which attached display currently holds the main window."""
+    if not screens:
+        return None
+    if window is None:
+        return screens[0]
+    attached = getattr(window, "screen", None)
+    if attached is not None:
+        for s in screens:
+            if _same_screen(s, attached):
+                return s
+        return attached
+    try:
+        wx = getattr(window, "x", None)
+        wy = getattr(window, "y", None)
+        ww = int(getattr(window, "width", 0) or 0)
+        wh = int(getattr(window, "height", 0) or 0)
+        if wx is None or wy is None:
+            return screens[0]
+        cx = int(wx) + max(1, ww) // 2
+        cy = int(wy) + max(1, wh) // 2
+    except Exception:
+        return screens[0]
+    for s in screens:
+        try:
+            if (int(s.x) <= cx < int(s.x) + int(s.width)
+                    and int(s.y) <= cy < int(s.y) + int(s.height)):
+                return s
+        except Exception:
+            continue
+    return screens[0]
 
 
 def _log(msg: str) -> None:
@@ -192,7 +349,7 @@ def _open_webview(url: str, engine: EyeRhythmEngine) -> None:
     ontop = bool(prefs.get("ontop", False))
     _log(f"restoring window {width}x{height} ontop={ontop}")
 
-    api = _WindowApi()
+    api = _WindowApi(url)
     window = webview.create_window(
         WINDOW_TITLE,
         url,
@@ -220,6 +377,10 @@ def _open_webview(url: str, engine: EyeRhythmEngine) -> None:
 
     def on_closing():
         _save_window_size(window)
+        try:
+            api.set_sweep_overlays(False)
+        except Exception:
+            pass
         # Keep toggles in sync with engine (already auto-saved on change).
         try:
             preferences.set_toggles(**engine.get_toggles())

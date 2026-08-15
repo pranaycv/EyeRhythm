@@ -84,15 +84,15 @@ export function ControlsBar({ state }: Props) {
         pulse={alertPulse ? "red" : null}
         onClick={() => void flip("alert")}
         disabled={busy === "alert"}
-        title="Alert when current rate and last-5-min average are both below ~10/min (stops as soon as current rate recovers)"
+        title="Alert when current rate is below ~10/min and that has been true for at least 2 minutes in the last 5 (zeros and off-screen time ignored). Stops as soon as current rate recovers."
       />
       <ToggleChip
-        label="On top"
-        hint="T"
-        active={state.ontop}
-        onClick={() => void flip("ontop")}
-        disabled={busy === "ontop"}
-        title="Keep window always on top"
+        label="Sweep"
+        hint="S"
+        active={state.sweep}
+        onClick={() => void flip("sweep")}
+        disabled={busy === "sweep"}
+        title="Find your extreme look angles — glance at each screen’s corners, then the centre of every monitor"
       />
       <ToggleChip
         label="Practice"

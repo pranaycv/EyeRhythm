@@ -15,6 +15,7 @@ The GUI is intentionally not here — only numbers, flags, and optional JPEG fra
 from __future__ import annotations
 
 import base64
+import math
 import platform
 import sys
 import threading
@@ -63,6 +64,9 @@ ALERT_WARMUP_S = 60.0
 FACE_BREAK_S = 60.0
 # Rolling window used to judge low-rate *trend* (not a single instant dip).
 ALERT_TREND_WINDOW_S = 300.0  # last 5 minutes of face-present rate samples
+# Beep only after this much *genuine* low-rate time inside that window.
+# Off-screen / no-face zeros and empty-window decay do not count.
+ALERT_LOW_NEED_S = 120.0
 # Do not store a sample more often than this (keeps the deque small).
 ALERT_TREND_SAMPLE_S = 1.0
 
@@ -73,6 +77,17 @@ PRACTICE_COUNTDOWN_S = 20.0
 PRACTICE_DURATION_S = 120.0
 # After active practice, hold results (rate + regularity) on screen.
 PRACTICE_SUMMARY_S = 20.0
+
+# Look-angle sweep: ignore near-straight samples so the primary-screen
+# centre does not seed an extreme. Eight sectors — 4 corners + 4 edges.
+SWEEP_STRAIGHT_DEG = 3.0
+# Drop degenerate / lost-face pose spikes.
+SWEEP_MAX_DEG = 80.0
+# Off-screen hysteresis around registered sector thresholds.
+SWEEP_OFFSCREEN_ENTER_DEG = 1.5
+SWEEP_OFFSCREEN_EXIT_DEG = 2.0
+# tl t tr / l · r / bl b br  (user-perspective yaw/pitch octants)
+SWEEP_SECTORS = ("tl", "t", "tr", "l", "r", "bl", "b", "br")
 
 # Camera resilience
 READ_FAILS_BEFORE_REOPEN = 8
@@ -96,6 +111,65 @@ PREVIEW_JPEG_QUALITY = 82
 PREVIEW_MIN_INTERVAL_S = 0.12  # ~8 fps ceiling for the stream
 # Legacy alias (logs / older call sites)
 CAPTURE_MAX_WIDTH = PROCESS_MAX_WIDTH
+
+
+def blank_sweep_sectors() -> dict[str, float | None]:
+    return {key: None for key in SWEEP_SECTORS}
+
+
+def assign_sweep_sector(yaw_deg: float, pitch_deg: float) -> str | None:
+    """
+    Which of the eight look-angle sectors this sample should update.
+
+    Returns one of ``tl t tr l r bl b br``, or ``None`` when the look is
+    near-straight (primary-screen centre). Sectors are 45° octants from
+    ``atan2(pitch, yaw)`` so left/right/top/bottom are the edge midpoints
+    and the diagonals are the four corners.
+    """
+    if abs(yaw_deg) < SWEEP_STRAIGHT_DEG and abs(pitch_deg) < SWEEP_STRAIGHT_DEG:
+        return None
+    heading = math.degrees(math.atan2(pitch_deg, yaw_deg))  # −180…180
+    idx = int(math.floor((heading + 180.0 + 22.5) / 45.0)) % 8
+    return ("l", "bl", "b", "br", "r", "tr", "t", "tl")[idx]
+
+
+def look_beyond_thresholds(
+    angle_deg: float | None,
+    yaw_deg: float | None,
+    pitch_deg: float | None,
+    limits: dict[str, float | None],
+    *,
+    slack_deg: float = SWEEP_OFFSCREEN_ENTER_DEG,
+) -> bool:
+    """
+    True if this look is past the registered extreme in its sector.
+
+    No registered value in this sector → not off-screen. Near-straight
+    looks never are.
+    """
+    if angle_deg is None or yaw_deg is None or pitch_deg is None:
+        return False
+    try:
+        angle = float(angle_deg)
+        yaw = float(yaw_deg)
+        pitch = float(pitch_deg)
+    except (TypeError, ValueError):
+        return False
+    if not (math.isfinite(angle) and math.isfinite(yaw) and math.isfinite(pitch)):
+        return False
+    sector = assign_sweep_sector(yaw, pitch)
+    if sector is None:
+        return False
+    limit = limits.get(sector)
+    if limit is None:
+        return False
+    try:
+        cap = float(limit)
+    except (TypeError, ValueError):
+        return False
+    if not math.isfinite(cap):
+        return False
+    return angle > (cap + float(slack_deg))
 
 
 def _log(msg: str) -> None:
@@ -267,19 +341,21 @@ class AlertMonitor:
     Background beeps while face present and rate is low — with trend guard.
 
     Beep only when **all** of these hold:
-      * face is present,
+      * face is present (off-screen counts as absent),
       * face-break / first-face warmup is finished,
       * **current** continuous BPM is below ``ALERT_BPM_THRESHOLD`` (10)
         but **not zero** (0 means no usable face / empty window — ignored),
-      * **average** continuous BPM over the last ``ALERT_TREND_WINDOW_S``
-        (5 minutes of **genuine** face-present, non-zero samples) is also
-        below that threshold.
+      * in the last ``ALERT_TREND_WINDOW_S`` (5 min) there have been at
+        least ``ALERT_LOW_NEED_S`` (2 min) of **genuine** low-rate time
+        (0 < BPM < threshold). Zeros and off-screen / no-face gaps are
+        excluded so a decaying leftover window after looking away cannot
+        start the alert.
 
     Samples with BPM ≤ 0 are never stored in the trend and never count as
     “low rate” (those are no-face / unusable readings, not genuine low blinking).
 
     As soon as the **current** rate rises to ≥ threshold, beeps stop
-    immediately (even if the 5-minute average is still low).
+    immediately (even if the 2-of-5-min low-rate clock is still full).
 
     Alert beeps are also suppressed for ``ALERT_WARMUP_S`` (default 60 s) after:
       * construction / first face of the session, and
@@ -329,9 +405,11 @@ class AlertMonitor:
                 self._face_present = True
                 self._ever_had_face = True
                 self._absent_since = None
+                self._bpm = float(bpm)
                 # Only genuine rates (BPM > 0). Zero is treated as no usable
                 # face / empty window — must not inflate “low rate” time.
-                if float(bpm) > 0.0:
+                # Warmup / post-gap hold: leftover decaying BPM is not genuine.
+                if float(bpm) > 0.0 and now >= self._suppress_until:
                     self._record_trend_sample(now, float(bpm))
             else:
                 if self._face_present:
@@ -341,7 +419,9 @@ class AlertMonitor:
                     # Never saw a face yet, or state was reset — count as absent.
                     self._absent_since = now
                 self._face_present = False
-            self._bpm = float(bpm)
+                # Off-screen / no-face: do not keep a decaying leftover rate
+                # as “current” (that would look like genuine low blinking).
+                self._bpm = 0.0
             self._face_found = bool(face_found)
             self._prune_trend(now)
 
@@ -372,47 +452,38 @@ class AlertMonitor:
         while self._trend and self._trend[0][0] < cutoff:
             self._trend.popleft()
 
-    def _trend_average_bpm(self, now: float) -> float | None:
+    def _low_rate_seconds(self, now: float) -> float:
         """
-        Time-weighted average of continuous BPM over the last 5 minutes.
-
-        Uses only genuine samples (BPM > 0). Zero-rate gaps are skipped so
-        no-face / empty-window zeros cannot drag the average down.
-        None if there is no usable history yet.
+        Seconds of genuine low blinking (0 < BPM < threshold) in the last
+        5 minutes. Gaps (off-screen / no-face) and zeros are not counted.
+        Caller holds lock.
         """
         self._prune_trend(now)
-        # Keep only positive-rate samples (defensive if any zeros slipped in).
-        pts = [(t, v) for t, v in self._trend if v > 0.0]
+        cutoff = now - ALERT_TREND_WINDOW_S
+        pts = [(t, v) for t, v in self._trend if v > 0.0 and t >= cutoff]
         if not pts:
-            return None
-        # Time-weight consecutive genuine samples; do not bridge long gaps
-        # with a zero-rate span (those gaps are not “low blinking”).
-        total_w = 0.0
-        total_v = 0.0
-        max_bridge = ALERT_TREND_SAMPLE_S * 3.0  # ~3 s between samples
+            return 0.0
+        low = 0.0
+        max_bridge = ALERT_TREND_SAMPLE_S * 3.0  # ~3 s between on-screen samples
         for i, (t, v) in enumerate(pts):
             if i + 1 < len(pts):
                 t_next = pts[i + 1][0]
                 dt = max(0.0, t_next - t)
-                # Large hole = face/zero gap — do not count that empty time.
+                # Large hole = off-screen / no-face — do not count that time.
                 if dt > max_bridge:
                     dt = ALERT_TREND_SAMPLE_S
             else:
-                # Last sample: only extend a short tail to ``now`` if still live.
+                # Last sample: only a short tail (do not stretch across a gap).
                 dt = min(max(0.0, now - t), ALERT_TREND_SAMPLE_S)
-            if dt <= 0:
-                continue
-            total_w += dt
-            total_v += v * dt
-        if total_w <= 0:
-            return float(pts[-1][1])
-        return total_v / total_w
+            if dt > 0.0 and v < self._threshold:
+                low += dt
+        return low
 
     def _should_beep_locked(self, now: float) -> bool:
         """
         Beep gate (caller holds lock):
           current bpm is a genuine low rate (0 < bpm < threshold)
-          AND 5-min average of genuine samples < threshold
+          AND ≥ 2 min of genuine low-rate time in the last 5 min
           AND face present  AND  not in face-break warmup.
         Current rate ≥ threshold → False immediately (stop beeps).
         Current rate ≤ 0 → False (not a genuine low-blink reading).
@@ -427,11 +498,9 @@ class AlertMonitor:
         # Immediate stop when current rate is healthy again.
         if self._bpm >= self._threshold:
             return False
-        avg = self._trend_average_bpm(now)
-        if avg is None or avg <= 0.0:
-            return False
-        # Trend over last 5 minutes must also be below threshold.
-        return avg < self._threshold
+        # Need a real stretch of low blinking, not a few leftover-window samples
+        # after coming back from off-screen.
+        return self._low_rate_seconds(now) >= ALERT_LOW_NEED_S
 
     def _on_face_reappeared(self, now: float) -> None:
         """Apply warmup after first face or after a long absence (caller holds lock)."""
@@ -490,7 +559,11 @@ class AlertMonitor:
                 now = time.monotonic()
                 # Keep trend head fresh even between sparse camera frames
                 # (genuine non-zero rates only).
-                if self._face_found and self._bpm > 0.0:
+                if (
+                    self._face_found
+                    and self._bpm > 0.0
+                    and now >= self._suppress_until
+                ):
                     self._record_trend_sample(now, self._bpm)
                 should = self._should_beep_locked(now)
             if should:
@@ -652,6 +725,30 @@ class EngineSnapshot:
     alert: bool = False
     ontop: bool = False
     practice: bool = False
+    # Look-angle sweep (session-local, like practice).
+    sweep: bool = False
+    # "off" | "active" | "summary"
+    sweep_phase: str = "off"
+    # Max face_angle_deg in each of 8 sectors (None = none yet).
+    sweep_tl_deg: float | None = None
+    sweep_t_deg: float | None = None
+    sweep_tr_deg: float | None = None
+    sweep_l_deg: float | None = None
+    sweep_r_deg: float | None = None
+    sweep_bl_deg: float | None = None
+    sweep_b_deg: float | None = None
+    sweep_br_deg: float | None = None
+    # Registered workspace extrema (persisted after Sweep → Finish → Close).
+    look_tl_deg: float | None = None
+    look_t_deg: float | None = None
+    look_tr_deg: float | None = None
+    look_l_deg: float | None = None
+    look_r_deg: float | None = None
+    look_bl_deg: float | None = None
+    look_b_deg: float | None = None
+    look_br_deg: float | None = None
+    # Looking beyond those registered extrema (False when no face / no limits).
+    off_screen: bool = False
     # "off" | "countdown" | "active" | "summary"
     practice_phase: str = "off"
     # Seconds left in the pre-start countdown (read instructions).
@@ -739,21 +836,38 @@ class EyeRhythmEngine:
         self._practice_result_blinks = 0
         self._practice_result_bpm = 0.0
         self._practice_result_regularity: float | None = None
+        # Look-angle sweep: user-paced capture of 8 sector extrema.
+        self._sweep_phase = "off"  # off | active | summary
+        self._sweep = blank_sweep_sectors()
+        # Registered look-angle workspace (from last finished sweep).
+        saved_prefs = preferences.load()
+        self._look = {
+            key: saved_prefs.get(f"look_{key}_deg") for key in SWEEP_SECTORS
+        }
+        self._look_off_screen = False
+        # Pause the 60s rate window across no-face / off-screen gaps.
+        self._rate_present = False
+        self._rate_absent_mono: float | None = None
+        self._held_bpm = 0.0
 
         # Restore last session toggles (Beep / Alert / On top only).
-        # Practice is always session-local and never restored.
+        # Practice and Sweep are always session-local and never restored.
         saved = preferences.get_toggles()
         self._states = {
             "beep": bool(saved.get("beep", False)),
             "alert": bool(saved.get("alert", False)),
             "ontop": bool(saved.get("ontop", False)),
             "practice": False,
+            "sweep": False,
         }
         self._snap = EngineSnapshot(
             beep=self._states["beep"],
             alert=self._states["alert"],
             ontop=self._states["ontop"],
             practice=False,
+            sweep=False,
+            **{f"look_{key}_deg": self._look.get(key) for key in SWEEP_SECTORS},
+            off_screen=False,
             practice_phase="off",
             practice_countdown_s=0.0,
             practice_countdown_total_s=float(PRACTICE_COUNTDOWN_S),
@@ -828,7 +942,7 @@ class EyeRhythmEngine:
 
     def set_toggle(self, name: str, value: bool | None = None) -> dict[str, bool]:
         """
-        Set or flip a toggle: beep | alert | ontop | practice.
+        Set or flip a toggle: beep | alert | ontop | practice | sweep.
 
         If ``value`` is None, flip current state.
         """
@@ -866,7 +980,8 @@ class EyeRhythmEngine:
             self._snap.alert = self._states["alert"]
             self._snap.ontop = self._states["ontop"]
             self._snap.practice = self._states["practice"]
-            # Persist durable toggles only — practice is session-local.
+            self._snap.sweep = self._states["sweep"]
+            # Persist durable toggles only — practice / sweep are session-local.
             try:
                 preferences.set_toggles(
                     beep=self._states["beep"],
@@ -877,12 +992,21 @@ class EyeRhythmEngine:
                 pass
             practice_on = self._states["practice"] and name == "practice"
             practice_off = (not self._states["practice"]) and name == "practice"
+            sweep_on = self._states["sweep"] and name == "sweep"
+            sweep_off = (not self._states["sweep"]) and name == "sweep"
 
-        # Start/stop practice outside the lock to avoid deadlocks with join().
+        # Start/stop overlays outside the lock to avoid deadlocks with join().
         if practice_on:
+            self._stop_sweep_session(clear_toggle=True)
             self._begin_practice_session()
         elif practice_off:
             self._stop_practice_session()
+
+        if sweep_on:
+            self._stop_practice_session(clear_toggle=True)
+            self._begin_sweep_session()
+        elif sweep_off:
+            self._stop_sweep_session()
 
         with self._lock:
             return dict(self._states)
@@ -1059,6 +1183,160 @@ class EyeRhythmEngine:
         self._summary_thread = None
         _log("practice summary finished — session closed")
 
+    def _write_sectors_to_snap(
+        self, prefix: str, values: dict[str, float | None]
+    ) -> None:
+        for key in SWEEP_SECTORS:
+            setattr(self._snap, f"{prefix}_{key}_deg", values.get(key))
+
+    def _sector_payload(self, values: dict[str, float | None]) -> dict[str, float | None]:
+        return {f"sweep_{key}_deg": values.get(key) for key in SWEEP_SECTORS}
+
+    def _begin_sweep_session(self) -> None:
+        """Start capturing the eight extreme look angles."""
+        with self._lock:
+            self._states["sweep"] = True
+            self._sweep_phase = "active"
+            self._sweep = blank_sweep_sectors()
+            self._snap.sweep = True
+            self._snap.sweep_phase = "active"
+            self._write_sectors_to_snap("sweep", self._sweep)
+        _log("sweep active — capturing look-angle extrema")
+
+    def _stop_sweep_session(self, *, clear_toggle: bool = True) -> None:
+        """Leave sweep overlay. Close from the summary registers the 8 extrema."""
+        with self._lock:
+            should_register = clear_toggle and self._sweep_phase == "summary"
+            captured = dict(self._sweep)
+            self._sweep_phase = "off"
+            if clear_toggle:
+                self._states["sweep"] = False
+            self._snap.sweep = bool(self._states.get("sweep", False)) and not clear_toggle
+            if clear_toggle:
+                self._snap.sweep = False
+            self._snap.sweep_phase = "off"
+            self._write_sectors_to_snap("sweep", self._sweep)
+        if should_register:
+            self._register_look_thresholds(captured)
+
+    def _register_look_thresholds(self, values: dict[str, float | None]) -> None:
+        """Persist workspace extrema so the Look angle card and off-screen gate use them."""
+        if all(values.get(key) is None for key in SWEEP_SECTORS):
+            return
+        stored = {key: values.get(key) for key in SWEEP_SECTORS}
+        with self._lock:
+            self._look = dict(stored)
+            self._look_off_screen = False
+            self._write_sectors_to_snap("look", self._look)
+            self._snap.off_screen = False
+        try:
+            preferences.save(
+                {f"look_{key}_deg": stored[key] for key in SWEEP_SECTORS}
+            )
+        except Exception:
+            pass
+        _log("look thresholds registered " + " ".join(
+            f"{key}={stored[key]}" for key in SWEEP_SECTORS
+        ))
+
+    def _sync_rate_presence(self, present: bool, res: FrameResult, ts_ms: int) -> None:
+        """
+        Pause the 60s blink-rate window while off-screen / no-face.
+
+        Absence is not low blinking. When the user returns, leftover blink
+        timestamps are shifted so the published rate does not decay across
+        the gap. Alert trend samples are also skipped while absent.
+        """
+        now = time.monotonic()
+        if present:
+            if not self._rate_present and self._rate_absent_mono is not None:
+                gap_ms = (now - self._rate_absent_mono) * 1000.0
+                if gap_ms > 1000.0 and self._detector is not None:
+                    self._detector.hold_rate_across_gap(gap_ms)
+                    res.blinks_per_minute = self._detector.blinks_per_minute_at(
+                        ts_ms)
+            self._rate_present = True
+            self._rate_absent_mono = None
+            self._held_bpm = float(res.blinks_per_minute or 0.0)
+        else:
+            if self._rate_present:
+                self._rate_absent_mono = now
+            self._rate_present = False
+
+    def _update_off_screen(self, res: FrameResult) -> bool:
+        """Hysteresis around registered extrema. Disabled during sweep."""
+        with self._lock:
+            if self._sweep_phase in ("active", "summary"):
+                self._look_off_screen = False
+                return False
+            if not res.face_found:
+                self._look_off_screen = False
+                return False
+            limits = dict(self._look)
+            was = self._look_off_screen
+        slack = (
+            -SWEEP_OFFSCREEN_EXIT_DEG if was else SWEEP_OFFSCREEN_ENTER_DEG
+        )
+        beyond = look_beyond_thresholds(
+            res.face_angle_deg,
+            res.face_yaw_deg,
+            res.face_pitch_deg,
+            limits,
+            slack_deg=slack,
+        )
+        with self._lock:
+            self._look_off_screen = beyond
+            return beyond
+
+    def finish_sweep(self) -> dict[str, Any]:
+        """Freeze extrema and show the results screen (user-paced)."""
+        with self._lock:
+            if not self._states.get("sweep"):
+                raise ValueError("sweep is not running")
+            self._sweep_phase = "summary"
+            self._snap.sweep = True
+            self._snap.sweep_phase = "summary"
+            self._write_sectors_to_snap("sweep", self._sweep)
+            _log(
+                "sweep summary — "
+                + " ".join(f"{k}={self._sweep[k]}" for k in SWEEP_SECTORS)
+            )
+            return {
+                "ok": True,
+                "sweep_phase": "summary",
+                **self._sector_payload(self._sweep),
+            }
+
+    def _ingest_sweep_sample(
+        self,
+        angle_deg: float | None,
+        yaw_deg: float | None,
+        pitch_deg: float | None,
+    ) -> None:
+        """Raise the matching sector max while sweep is actively capturing."""
+        if angle_deg is None or yaw_deg is None or pitch_deg is None:
+            return
+        try:
+            angle = float(angle_deg)
+            yaw = float(yaw_deg)
+            pitch = float(pitch_deg)
+        except (TypeError, ValueError):
+            return
+        if not (math.isfinite(angle) and math.isfinite(yaw) and math.isfinite(pitch)):
+            return
+        if angle < 0.0 or angle > SWEEP_MAX_DEG:
+            return
+        sector = assign_sweep_sector(yaw, pitch)
+        if sector is None:
+            return
+        angle = round(angle, 1)
+        with self._lock:
+            if self._sweep_phase != "active":
+                return
+            cur = self._sweep.get(sector)
+            self._sweep[sector] = angle if cur is None else max(cur, angle)
+            self._write_sectors_to_snap("sweep", self._sweep)
+
     def _note_blink_pulse(self) -> None:
         """UI: orange pulse on Beep (if on) / Practice (if on) dots."""
         with self._lock:
@@ -1090,6 +1368,11 @@ class EyeRhythmEngine:
             self._snap.alert = self._states["alert"]
             self._snap.ontop = self._states["ontop"]
             self._snap.practice = self._states["practice"]
+            self._snap.sweep = self._states["sweep"]
+            self._snap.sweep_phase = self._sweep_phase
+            self._write_sectors_to_snap("sweep", self._sweep)
+            self._write_sectors_to_snap("look", self._look)
+            self._snap.off_screen = self._look_off_screen
             self._snap.practice_phase = self._practice_phase
             self._snap.practice_interval_s = float(PRACTICE_INTERVAL_S)
             self._snap.practice_countdown_total_s = float(PRACTICE_COUNTDOWN_S)
@@ -1324,7 +1607,9 @@ class EyeRhythmEngine:
                     read_fails += 1
                     pacer.note_no_signal()
                     self._screen_time.tick(False)
-                    self._alert.update(last_res.blinks_per_minute, False)
+                    self._sync_rate_presence(False, last_res, 0)
+                    self._alert.update(self._held_bpm, False)
+                    self._look_off_screen = False
                     self._publish(
                         face_found=False,
                         camera_ok=False,
@@ -1380,13 +1665,28 @@ class EyeRhythmEngine:
                 except Exception as exc:
                     _log(f"frame processing error (skipped): {exc}")
                     self._screen_time.tick(False)
-                    # Keep alert absence tracking honest during errors.
-                    self._alert.update(last_res.blinks_per_minute, False)
+                    self._sync_rate_presence(False, last_res, ts_ms)
+                    self._alert.update(self._held_bpm, False)
                     pacer.sleep_for_frame(loop_start)
                     continue
 
                 last_res = res
-                self._screen_time.tick(res.face_found)
+                off_screen = self._update_off_screen(res)
+                if (
+                    off_screen
+                    and res.blink_just_counted
+                    and self._detector is not None
+                ):
+                    self._detector.discard_last_blink()
+                    res.blink_just_counted = False
+                    res.blink_count = self._detector._blink_count
+                    res.blinks_per_minute = self._detector.blinks_per_minute_at(
+                        ts_ms)
+
+                # Off-screen is treated like no-face for presence (not FPS).
+                present = bool(res.face_found) and not off_screen
+                self._sync_rate_presence(present, res, ts_ms)
+                self._screen_time.tick(present)
                 # Keep research hour buckets aligned with face-present time.
                 try:
                     self._interblink_hours.on_screen_seconds(
@@ -1429,7 +1729,14 @@ class EyeRhythmEngine:
                     blink_just_counted=res.blink_just_counted,
                 )
 
-                self._alert.update(res.blinks_per_minute, res.face_found)
+                # Only the on-screen rate is live. While away, hold the last
+                # on-screen BPM so the 60s window does not decay into “low”.
+                live_bpm = (
+                    float(res.blinks_per_minute)
+                    if present
+                    else float(self._held_bpm)
+                )
+                self._alert.update(live_bpm, present)
 
                 frames += 1
                 now = time.monotonic()
@@ -1440,9 +1747,12 @@ class EyeRhythmEngine:
                 if want_preview:
                     self._encode_preview(display_frame, res)
 
+                self._ingest_sweep_sample(
+                    res.face_angle_deg, res.face_yaw_deg, res.face_pitch_deg)
+
                 reg = self._regularity.score
                 self._publish(
-                    continuous_bpm=round(res.blinks_per_minute, 1),
+                    continuous_bpm=round(live_bpm, 1),
                     average_bpm=round(self._screen_time.avg_blinks_per_minute, 1),
                     screen_time=self._screen_time.formatted(),
                     screen_time_seconds=self._screen_time.seconds_today,

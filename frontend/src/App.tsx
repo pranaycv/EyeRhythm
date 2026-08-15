@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchPreferences, savePreferences, setToggle } from "./api";
-import { whenBridgeReady } from "./bridge";
+import { isSweepOverlayWindow, whenBridgeReady } from "./bridge";
 import { type AvatarId } from "./components/Avatar";
 import { ControlsBar } from "./components/ControlsBar";
 import { HeroPanel } from "./components/HeroPanel";
@@ -8,9 +8,17 @@ import { Logo } from "./components/Logo";
 import { MetricCard } from "./components/MetricCard";
 import { InfoQuoteCard } from "./components/InfoQuoteCard";
 import { PracticeScreen } from "./components/PracticeScreen";
+import { SweepScreen } from "./components/SweepScreen";
 import { useEngineState } from "./hooks/useEngineState";
 import { useRateHistory } from "./hooks/useRateHistory";
 import { formatBpm, lookAngleTone, regularityTone, rateTone } from "./utils/format";
+import {
+  LOOK_COMPASS,
+  LOOK_SLOT_META,
+  formatLookDeg,
+  hasAnyLookLimit,
+  lookValuesFromState,
+} from "./utils/lookSectors";
 
 const AVATARS: AvatarId[] = ["atlas", "lumen", "vesper", "lens", "graph"];
 
@@ -21,13 +29,33 @@ function asAvatarId(v: unknown): AvatarId {
   return "atlas";
 }
 
+function SweepOverlayApp() {
+  const { state } = useEngineState();
+  return (
+    <div className="sweep-overlay-root">
+      <SweepScreen state={state} satellite />
+    </div>
+  );
+}
+
 export default function App() {
+  if (isSweepOverlayWindow()) {
+    return <SweepOverlayApp />;
+  }
+  return <DashboardApp />;
+}
+
+function DashboardApp() {
   const { state, connected } = useEngineState();
   const [avatarId, setAvatarId] = useState<AvatarId>("atlas");
   const [prefsReady, setPrefsReady] = useState(false);
 
   // Session-wide Trace history: starts at boot, survives avatar switches + minimize.
-  useRateHistory(state.continuous_bpm, state.face_found, state.regularity);
+  useRateHistory(
+    state.continuous_bpm,
+    state.face_found && !state.off_screen,
+    state.regularity,
+  );
 
   useEffect(() => {
     void whenBridgeReady();
@@ -69,6 +97,7 @@ export default function App() {
       if (k === "b") void setToggle("beep");
       else if (k === "a") void setToggle("alert");
       else if (k === "t") void setToggle("ontop");
+      else if (k === "s") void setToggle("sweep");
       else if (k === "p") void setToggle("practice");
       else if (k === "c") {
         persistAvatar(avatarId === "lens" ? "atlas" : "lens");
@@ -78,10 +107,15 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [avatarId, persistAvatar]);
 
-  const bpmTone = rateTone(state.continuous_bpm, state.face_found);
+  const present = state.face_found && !state.off_screen;
+  const bpmTone = rateTone(state.continuous_bpm, present);
   const avgTone = rateTone(state.average_bpm, state.screen_time_seconds > 30);
   const regTone = regularityTone(state.regularity);
-  const lookTone = lookAngleTone(state.face_angle_deg, state.face_found);
+  const lookTone = lookAngleTone(
+    state.face_angle_deg,
+    state.face_found,
+    state.off_screen,
+  );
 
   const regValue =
     state.regularity_ready && state.regularity !== null
@@ -97,10 +131,14 @@ export default function App() {
     state.face_found && state.face_angle_deg !== null
       ? Math.round(state.face_angle_deg)
       : "—";
-  const lookSub =
-    state.face_found && state.face_direction
-      ? state.face_direction
-      : "no face";
+  const lookSub = !state.face_found
+    ? "no face"
+    : state.off_screen
+      ? "off-screen"
+      : state.face_direction || "straight";
+
+  const lookLimits = lookValuesFromState(state);
+  const hasLookLimits = hasAnyLookLimit(lookLimits);
 
   return (
     <div className="app-shell" data-prefs-ready={prefsReady ? "1" : "0"}>
@@ -192,9 +230,35 @@ export default function App() {
               state.face_found && state.face_angle_deg !== null ? "°" : undefined
             }
             subtitle={lookSub}
+            help="0° means looking straight at the camera. Sweep (S) captures eight extreme look angles. Look at each corner, edge, and monitor centre for a few seconds — no blink needed. Turning your face toward a secondary screen is fine. Finish, then Close to save the limits. Looking farther than a saved direction shows Off-screen and pauses blinks and alerts."
             tone={lookTone}
             palette="lavender"
-          />
+          >
+            {hasLookLimits ? (
+              <div className="look-limits" aria-label="Saved look-angle limits">
+                {LOOK_COMPASS.map((slot) =>
+                  slot === "center" ? (
+                    <span
+                      key="center"
+                      className="look-limits__cell look-limits__cell--center"
+                      aria-hidden
+                    >
+                      ·
+                    </span>
+                  ) : (
+                    <span
+                      key={slot}
+                      className="look-limits__cell"
+                      title={LOOK_SLOT_META[slot].label}
+                    >
+                      <em>{LOOK_SLOT_META[slot].short}</em>
+                      <strong>{formatLookDeg(lookLimits[slot])}</strong>
+                    </span>
+                  ),
+                )}
+              </div>
+            ) : null}
+          </MetricCard>
           {/* Always full-width gray card: tips + famous quotes (practice mode overlays coach) */}
           <InfoQuoteCard
             practice={Boolean(state.practice)}
@@ -211,6 +275,8 @@ export default function App() {
 
       {/* Full-screen practice: countdown + ball/string visual coach */}
       <PracticeScreen state={state} />
+      {/* Full-screen look-angle sweep: corners + every monitor centre */}
+      <SweepScreen state={state} />
     </div>
   );
 }

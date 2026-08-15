@@ -94,8 +94,9 @@ LEFT_EYE_OUTER_IDX = 33
 RIGHT_EYE_OUTER_IDX = 263
 # Dead-zone (degrees): |yaw| and |pitch| below this → direction "straight".
 FACE_STRAIGHT_DEG = 8.0
-# Flip yaw sign if mirrored preview makes left/right feel reversed (+1 or -1).
-FACE_YAW_SIGN = 1.0
+# Flip yaw sign so left/right are from the *user's* perspective (they look
+# left → "left"), not the unmirrored camera image. +1 = image-right; −1 = user-left.
+FACE_YAW_SIGN = -1.0
 
 
 @dataclass
@@ -363,7 +364,8 @@ def estimate_face_camera_pose(
     (angle_deg, yaw_deg, pitch_deg) or None if geometry is degenerate.
 
     * **angle_deg** — 0 means face axis ‖ camera axis (looking straight in).
-    * **yaw_deg** — positive → face points to the **right** of the image.
+    * **yaw_deg** — positive → face points to the user's **right**
+      (``FACE_YAW_SIGN`` flips camera-image left/right).
     * **pitch_deg** — positive → face points **up** (looking toward top).
     """
     try:
@@ -618,6 +620,46 @@ class BlinkDetector:
         self._glasses_votes.clear()
         self._glasses_frame_i = 0
         self._last_has_glasses = False
+
+    def discard_last_blink(self) -> bool:
+        """
+        Undo the most recently counted blink.
+
+        Used when the blink happened while looking off-screen (beyond the
+        swept workspace). Returns True if a blink was removed.
+        """
+        if not self._blink_times_ms:
+            return False
+        self._blink_times_ms.pop()
+        self._blink_count = max(0, int(self._blink_count) - 1)
+        if self._blink_times_ms:
+            self._last_blink_ms = float(self._blink_times_ms[-1])
+        else:
+            self._last_blink_ms = -1e12
+        return True
+
+    def blinks_per_minute_at(self, timestamp_ms: float) -> float:
+        """Session blink rate after a possible discard."""
+        return self._bpm(timestamp_ms)
+
+    def hold_rate_across_gap(self, gap_ms: float) -> None:
+        """
+        Treat no-face / off-screen time as if the 60s *rate window* paused.
+
+        Only the BPM history timestamps move. The open/closed state machine
+        (``_last_blink_ms``, ``_closed_since_ms``) stays put so a gap cannot
+        invent extra refractory time or shrink a blink's duration.
+        """
+        try:
+            shift = float(gap_ms)
+        except (TypeError, ValueError):
+            return
+        if not math.isfinite(shift) or shift <= 0.0:
+            return
+        shifted: deque[float] = deque(maxlen=self._blink_times_ms.maxlen)
+        for t in self._blink_times_ms:
+            shifted.append(float(t) + shift)
+        self._blink_times_ms = shifted
 
     def close(self) -> None:
         """Release MediaPipe resources (call on app quit)."""

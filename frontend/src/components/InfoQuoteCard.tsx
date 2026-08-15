@@ -142,7 +142,10 @@ export function InfoQuoteCard({
             <strong>Beep</strong> — sound on each blink
           </li>
           <li>
-            <strong>Alert</strong> — warn if rate stays low (~10/min, 5‑min trend)
+            <strong>Alert</strong> — warn if rate stays low (~10/min for 2 of last 5 min)
+          </li>
+          <li>
+            <strong>Sweep</strong> — save your eight extreme look angles
           </li>
           <li>
             <strong>Practice</strong> — 2‑min blink coach

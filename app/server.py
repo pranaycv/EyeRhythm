@@ -6,7 +6,8 @@ Serves:
 * Built static frontend (production) or is used with Vite dev proxy
 * GET  /api/health
 * GET  /api/state          — one-shot engine snapshot
-* POST /api/toggles/{name} — beep | alert | ontop | practice  body: {"value": bool?}
+* POST /api/toggles/{name} — beep | alert | ontop | practice | sweep  body: {"value": bool?}
+* POST /api/sweep/finish   — freeze look-angle extrema and show results
 * GET  /api/preview        — latest JPEG bytes (when camera panel open)
 * WS   /ws/stats           — live JSON snapshots (~10 Hz)
 * WS   /ws/preview         — live JPEG frames as binary (when client asks)
@@ -132,7 +133,7 @@ def create_app(engine: "EyeRhythmEngine") -> FastAPI:
     @app.post("/api/toggles/{name}")
     def set_toggle(name: str, body: ToggleBody | None = None):
         name = name.lower().strip()
-        if name not in ("beep", "alert", "ontop", "practice"):
+        if name not in ("beep", "alert", "ontop", "practice", "sweep"):
             raise HTTPException(status_code=400, detail="unknown toggle")
         value = None if body is None else body.value
         try:
@@ -172,6 +173,14 @@ def create_app(engine: "EyeRhythmEngine") -> FastAPI:
         toggles = engine.get_toggles()
         prefs.update({k: toggles[k] for k in ("beep", "alert", "ontop")})
         return prefs
+
+    @app.post("/api/sweep/finish")
+    def sweep_finish():
+        """End capture and hold the eight extreme look angles on the overlay."""
+        try:
+            return engine.finish_sweep()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/quotes")
     def get_quotes():

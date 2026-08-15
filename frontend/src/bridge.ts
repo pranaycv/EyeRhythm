@@ -7,6 +7,8 @@ export interface EyeRhythmBridge {
   set_camera_layout: (expanded: boolean) => Promise<void> | void;
   /** Expand to fullscreen for Practice; restore on exit. */
   set_practice_fullscreen?: (enabled: boolean) => Promise<void> | void;
+  /** Fullscreen sweep dialog on every attached display. */
+  set_sweep_overlays?: (enabled: boolean) => Promise<void> | void;
 }
 
 declare global {
@@ -58,6 +60,43 @@ export async function setPracticeFullscreen(enabled: boolean): Promise<void> {
   } catch {
     /* permission / unsupported */
   }
+}
+
+/**
+ * Open / close extra fullscreen sweep windows on secondary displays.
+ * No-op in browser mode (only the current tab can go fullscreen).
+ */
+export async function setSweepOverlays(enabled: boolean): Promise<void> {
+  const api = window.pywebview?.api;
+  if (!api?.set_sweep_overlays) return;
+  try {
+    await api.set_sweep_overlays(enabled);
+  } catch {
+    /* unsupported / already closed */
+  }
+}
+
+export function isSweepOverlayWindow(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get("sweepOverlay") === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Where this overlay sits relative to the camera / main window. */
+export type OverlayPlace = "left" | "right" | "above" | "below" | "other";
+
+export function overlayPlace(): OverlayPlace {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("place");
+    if (raw === "left" || raw === "right" || raw === "above" || raw === "below") {
+      return raw;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "other";
 }
 
 /** Wait until pywebview has injected the API (desktop only). */

@@ -32,6 +32,30 @@ export interface EngineState {
   alert: boolean;
   ontop: boolean;
   practice: boolean;
+  /** Look-angle sweep overlay (session-local). */
+  sweep: boolean;
+  /** "off" | "active" | "summary" */
+  sweep_phase: string;
+  /** Max look angle (°) in each of 8 sectors; null until captured. */
+  sweep_tl_deg: number | null;
+  sweep_t_deg: number | null;
+  sweep_tr_deg: number | null;
+  sweep_l_deg: number | null;
+  sweep_r_deg: number | null;
+  sweep_bl_deg: number | null;
+  sweep_b_deg: number | null;
+  sweep_br_deg: number | null;
+  /** Registered workspace extrema (after Sweep → Finish → Close). */
+  look_tl_deg: number | null;
+  look_t_deg: number | null;
+  look_tr_deg: number | null;
+  look_l_deg: number | null;
+  look_r_deg: number | null;
+  look_bl_deg: number | null;
+  look_b_deg: number | null;
+  look_br_deg: number | null;
+  /** Looking beyond registered extrema; treated like no-face for blinks/alerts. */
+  off_screen: boolean;
   /** "off" | "countdown" | "active" | "summary" */
   practice_phase: string;
   /** Seconds left in the pre-start countdown. */
@@ -91,6 +115,25 @@ export const EMPTY_STATE: EngineState = {
   alert: false,
   ontop: false,
   practice: false,
+  sweep: false,
+  sweep_phase: "off",
+  sweep_tl_deg: null,
+  sweep_t_deg: null,
+  sweep_tr_deg: null,
+  sweep_l_deg: null,
+  sweep_r_deg: null,
+  sweep_bl_deg: null,
+  sweep_b_deg: null,
+  sweep_br_deg: null,
+  look_tl_deg: null,
+  look_t_deg: null,
+  look_tr_deg: null,
+  look_l_deg: null,
+  look_r_deg: null,
+  look_bl_deg: null,
+  look_b_deg: null,
+  look_br_deg: null,
+  off_screen: false,
   practice_phase: "off",
   practice_countdown_s: 0,
   practice_countdown_total_s: 20,
@@ -109,4 +152,4 @@ export const EMPTY_STATE: EngineState = {
   timestamp: 0,
 };
 
-export type ToggleName = "beep" | "alert" | "ontop" | "practice";
+export type ToggleName = "beep" | "alert" | "ontop" | "practice" | "sweep";

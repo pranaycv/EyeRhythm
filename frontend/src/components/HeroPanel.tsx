@@ -20,8 +20,9 @@ interface Props {
  *   has the last 5 minutes, even after avatar switches / minimize.
  */
 export function HeroPanel({ state, avatarId, onAvatarChange }: Props) {
-  const tone = rateTone(state.continuous_bpm, state.face_found);
-  const label = eyesLabel(state.face_found, state.eyes_closed);
+  const present = state.face_found && !state.off_screen;
+  const tone = rateTone(state.continuous_bpm, present);
+  const label = eyesLabel(state.face_found, state.eyes_closed, state.off_screen);
   const isLens = avatarId === "lens";
   const isGraph = avatarId === "graph";
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
@@ -50,7 +51,7 @@ export function HeroPanel({ state, avatarId, onAvatarChange }: Props) {
         <div className="hero__avatar-stage">
           {isGraph ? (
             <RateGraph
-              faceFound={state.face_found}
+              faceFound={present}
               lastBlinkAt={state.last_blink_at}
             />
           ) : (

@@ -8,6 +8,7 @@ Stores the last session UI state so the next launch looks the same:
 * window width / height (if the user resized; else defaults)
 * Beep / Alert / On top toggles
   (Practice is session-only and is never stored)
+* Look-angle workspace extrema (after Sweep → Finish → Close)
 
 File (local only, never uploaded)::
 
@@ -17,6 +18,7 @@ File (local only, never uploaded)::
 from __future__ import annotations
 
 import json
+import math
 import threading
 from copy import deepcopy
 from pathlib import Path
@@ -41,6 +43,15 @@ _DEFAULTS: dict[str, Any] = {
     "beep": False,
     "alert": False,
     "ontop": False,
+    # Registered look-angle workspace (None until first finished sweep).
+    "look_tl_deg": None,
+    "look_t_deg": None,
+    "look_tr_deg": None,
+    "look_l_deg": None,
+    "look_r_deg": None,
+    "look_bl_deg": None,
+    "look_b_deg": None,
+    "look_br_deg": None,
 }
 
 _lock = threading.RLock()
@@ -77,7 +88,31 @@ def _sanitize(raw: dict[str, Any]) -> dict[str, Any]:
             data[key] = bool(raw[key])
     # Ignore legacy "practice" key if present in old preference files.
 
+    for key in (
+        "look_tl_deg",
+        "look_t_deg",
+        "look_tr_deg",
+        "look_l_deg",
+        "look_r_deg",
+        "look_bl_deg",
+        "look_b_deg",
+        "look_br_deg",
+    ):
+        data[key] = _as_opt_angle(raw.get(key, data[key]))
+
     return data
+
+
+def _as_opt_angle(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        angle = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(angle) or angle < 0.0 or angle > 90.0:
+        return None
+    return round(angle, 1)
 
 
 def load() -> dict[str, Any]:

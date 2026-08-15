@@ -105,6 +105,25 @@ export function connectStatsSocket(
   };
 }
 
+export async function finishSweep(): Promise<{
+  ok: boolean;
+  sweep_phase: string;
+  sweep_tl_deg: number | null;
+  sweep_t_deg: number | null;
+  sweep_tr_deg: number | null;
+  sweep_l_deg: number | null;
+  sweep_r_deg: number | null;
+  sweep_bl_deg: number | null;
+  sweep_b_deg: number | null;
+  sweep_br_deg: number | null;
+}> {
+  const res = await fetch("/api/sweep/finish", { method: "POST" });
+  if (!res.ok) {
+    throw new Error("sweep finish failed");
+  }
+  return res.json();
+}
+
 export async function setToggle(
   name: ToggleName,
   value?: boolean,

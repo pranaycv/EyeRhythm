@@ -17,6 +17,7 @@ interface Props {
   value: ReactNode;
   unit?: string;
   subtitle?: string;
+  help?: string;
   tone?: Tone;
   palette?: CardPalette;
   placeholder?: boolean;
@@ -28,6 +29,7 @@ export function MetricCard({
   value,
   unit,
   subtitle,
+  help,
   tone = "neutral",
   palette = "mist",
   placeholder,
@@ -37,10 +39,22 @@ export function MetricCard({
     <article
       className={`metric-card palette-${palette} tone-${tone} ${
         placeholder ? "placeholder" : ""
-      }`}
+      } ${help ? "has-help" : ""}`}
     >
       <header className="metric-card__head">
-        <span className="metric-card__title">{title}</span>
+        <span className="metric-card__title-row">
+          <span className="metric-card__title">{title}</span>
+          {help ? (
+            <span className="metric-card__help" tabIndex={0}>
+              <span className="metric-card__help-mark" aria-hidden>
+                ?
+              </span>
+              <span className="metric-card__help-tip" role="tooltip">
+                {help}
+              </span>
+            </span>
+          ) : null}
+        </span>
         {subtitle ? <span className="metric-card__sub">{subtitle}</span> : null}
       </header>
       <div className="metric-card__body">
