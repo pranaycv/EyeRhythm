@@ -34,6 +34,22 @@ body {
   width: 520px;
 }
 
+.capture-page:has(.capture-app) {
+  padding: 0;
+  min-height: 0;
+  background: #e7eef6;
+}
+
+.capture-app {
+  width: 480px;
+  background: #e7eef6;
+}
+
+.capture-app .info-quote-card__quote,
+.capture-app .info-quote-card__author {
+  animation: none;
+}
+
 .capture-bar {
   display: flex;
   align-items: center;
@@ -108,6 +124,10 @@ body {
 
 .capture-reports {
   min-height: 560px;
+}
+
+.capture-nav[hidden] {
+  display: none !important;
 }
 
 .capture-nav {

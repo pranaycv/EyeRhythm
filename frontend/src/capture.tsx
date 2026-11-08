@@ -7,8 +7,10 @@ import ReactDOM from "react-dom/client";
 import { type AvatarId } from "./components/Avatar";
 import { ControlsBar } from "./components/ControlsBar";
 import { HeroPanel } from "./components/HeroPanel";
+import { InfoQuoteCard } from "./components/InfoQuoteCard";
 import { Logo } from "./components/Logo";
 import { MetricCard } from "./components/MetricCard";
+import { todayPlan } from "./components/SplashScreen";
 import { ReportChart } from "./components/ReportChart";
 import { seedRateHistoryForCapture } from "./hooks/rateHistory";
 import type { ReportPayload } from "./api";
@@ -25,6 +27,7 @@ const SCENES = [
   "fps",
   "reports",
   "poise",
+  "dashboard",
 ] as const;
 type Scene = (typeof SCENES)[number];
 
@@ -348,6 +351,103 @@ function PoiseScene() {
   );
 }
 
+function DashboardScene() {
+  const [avatar, setAvatar] = useState<AvatarId>("atlas");
+  const plan = todayPlan("comfortable");
+  return (
+    <div className="capture-app" data-capture-frame>
+      <div className="app-shell">
+        <header className="topbar">
+          <div className="topbar__brand">
+            <Logo size={30} />
+            <div>
+              <div className="topbar__title">EyesRhythm</div>
+              <div className="topbar__tag">Blink companion</div>
+            </div>
+          </div>
+          <div className="topbar__status">
+            <span className="status-dot ok" />
+            <span className="status-text">Live</span>
+          </div>
+        </header>
+        <main className="dashboard">
+          <HeroPanel
+            state={live}
+            avatarId={avatar}
+            onAvatarChange={setAvatar}
+          />
+          <div className="layout-toggles">
+            <button type="button" className="layout-toggle">
+              <span>Less</span>
+              <span className="layout-toggle__chevron" aria-hidden>
+                ▴
+              </span>
+            </button>
+            <button type="button" className="layout-toggle">
+              <span>Settings</span>
+              <span className="layout-toggle__chevron" aria-hidden>
+                ▸
+              </span>
+            </button>
+          </div>
+          <div className={`target-strip target-strip--${plan.tone}`} role="note">
+            <span className="target-strip__label">Today&apos;s plan</span>
+            <span className="target-strip__value">{plan.text}</span>
+          </div>
+          <section className="metrics-grid" aria-label="Blink metrics">
+            <MetricCard
+              title="Ocular Rhythm Index"
+              value={78}
+              unit="/100"
+              subtitle="70% rate · 30% rhythm"
+              tone={oriTone(78, true, 50)}
+              palette="mint"
+            />
+            <MetricCard
+              title="Screen time"
+              value="3h 12m"
+              subtitle="face visible today"
+              tone="neutral"
+              palette="peach"
+            />
+            <MetricCard
+              title="FPS"
+              value="30"
+              subtitle="face in view · auto"
+              tone="neutral"
+              palette="sky"
+            />
+            <MetricCard
+              title="Look angle"
+              value={8}
+              unit="°"
+              subtitle="straight"
+              tone="good"
+              palette="lavender"
+            />
+            <InfoQuoteCard
+              practice={false}
+              practicePhase="off"
+              countdownS={0}
+              remainingS={0}
+              oriThreshold={50}
+              alertLowMinutes={3}
+            />
+          </section>
+        </main>
+        <div className="shell-footer">
+          <ControlsBar state={live} />
+          <p className="footer-disclaimer">
+            <strong>For general wellness use only.</strong> EyesRhythm is not a
+            medical device and does not diagnose, treat, cure, or prevent disease —
+            full disclaimer in Settings → About.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ReportsScene() {
   const report = useMemo(() => dailyReport(), []);
   return (
@@ -411,6 +511,7 @@ function CaptureApp() {
       {scene === "fps" && <FpsScene />}
       {scene === "reports" && <ReportsScene />}
       {scene === "poise" && <PoiseScene />}
+      {scene === "dashboard" && <DashboardScene />}
     </div>
   );
 }
