@@ -2,6 +2,10 @@
 
 **Your eyes work hard for you. EyesRhythm helps them work longer.**
 
+<p align="center">
+  <img src="website/public/images/guide/dashboard.jpg" alt="EyesRhythm dashboard with today’s blink count, ocular rhythm, screen time, and the face companion" width="720">
+</p>
+
 Every day millions of knowledge workers, students and creators spend hours staring at screens. Research from the American Academy of Ophthalmology shows that the spontaneous blink rate drops by **half or more** during computer use. Fewer blinks → dry eyes, fatigue, blurred vision, and the classic symptoms of Computer Vision Syndrome.
 
 EyesRhythm is a lightweight, **on-device** companion that quietly watches your blink rate through the built-in webcam and gently nudges you back toward a healthy rhythm (~15–20 blinks per minute). No accounts, no cloud, no analytics, no video ever leaves your machine.
