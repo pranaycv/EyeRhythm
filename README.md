@@ -3,7 +3,7 @@
 **Your eyes work hard for you. EyesRhythm helps them work longer.**
 
 <p align="center">
-  <img src="website/public/images/github-dashboard.png" alt="EyesRhythm dashboard with today’s blink count, ocular rhythm, screen time, and the face companion" width="700">
+  <img src="website/public/images/glimpse.jpg" alt="EyesRhythm at a glance: the companion dashboard with Trace, Poise, avatars, practice, reports, and the visual alert" width="920">
 </p>
 
 Every day millions of knowledge workers, students and creators spend hours staring at screens. Research from the American Academy of Ophthalmology shows that the spontaneous blink rate drops by **half or more** during computer use. Fewer blinks → dry eyes, fatigue, blurred vision, and the classic symptoms of Computer Vision Syndrome.
