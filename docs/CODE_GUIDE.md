@@ -1,6 +1,6 @@
-# EyesRhythm — Code Guide
+# EyesRhythm code guide
 
-How the project fits together after the React UI rewrite.
+An overview of how the engine, the local API, and the React interface fit together. Start here before reading `app/engine.py` and `blink_core/detector.py`.
 
 ---
 
@@ -230,7 +230,7 @@ On every start, a same-theme overlay covers the dashboard until **Start** or
 2. Three notices: on-device privacy, not a medical device, how ORI and
    Alert work.
 
-Enter continues / starts. Dashboard shortcuts (B/A/T/P) are ignored until
+Enter continues / starts. Dashboard shortcuts (B/A/P/D/W/C) are ignored until
 the splash closes. UI: `frontend/src/components/SplashScreen.tsx`.
 
 ---
@@ -256,7 +256,7 @@ Tunables in `app/engine.py`: `PRACTICE_COUNTDOWN_S`, `PRACTICE_INTERVAL_S`,
 | Key | Effect |
 |-----|--------|
 | B | Toggle beep on each counted blink |
-| A | Toggle low-ORI alert (duration set in Settings; default 3 min below threshold in last 5 min) |
+| A | Switch the low-ORI alert between Visual and Sound (the alert is always on) |
 | P | Practice |
 | D | More / Less |
 | W | Settings / Hide settings |
@@ -286,23 +286,12 @@ Useful flags:
 * `--require-license` — Dodo Payments gate even from source
 * `--skip-license` — skip the license gate  
 
----
+## Tests
 
-## What stayed the same
-
-* `blink_core` detection math and thresholds  
-* Daily screen-time / blink persistence  
-* Beep + low-ORI alert behaviour  
-* Camera reconnect after sleep/wake  
-* Offline in normal use. The license gate is off  
-
-## What changed
-
-* OpenCV/Pillow stats card **removed**  
-* UI is React; window is pywebview (browser fallback)  
-* Live metrics stream over WebSocket  
+```bash
+python -m unittest discover -s tests
+```
 
 ---
 
-EyesRhythm source is under the PolyForm Noncommercial License 1.0.0. Packaged copies are free to download for a noncommercial purpose. Third-party terms:
-`THIRD_PARTY_NOTICES.md`. Take care of your eyes.
+See [`CHANGELOG.md`](../CHANGELOG.md) for the release history and [`CONTRIBUTING.md`](../CONTRIBUTING.md) for how to submit changes. EyesRhythm’s source is licensed under the PolyForm Noncommercial License 1.0.0; third-party terms are in [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).

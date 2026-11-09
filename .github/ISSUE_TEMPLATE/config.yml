@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Download EyesRhythm
+    url: https://eyesrhythm.com
+    about: Official macOS and Windows installers.
+  - name: Report a security issue
+    url: https://github.com/pranaycv/EyeRhythm/blob/main/SECURITY.md
+    about: Please report security problems privately by email, not as a public issue.
+  - name: General questions and feedback
+    url: mailto:hello@eyesrhythm.com
+    about: Email the maintainer.
