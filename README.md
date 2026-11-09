@@ -1,178 +1,188 @@
-# EyesRhythm — Blink companion
+<h1 align="center">
+  <img src="assets/app_icon.png" alt="" width="72"><br>
+  EyesRhythm
+</h1>
 
-**Your eyes work hard for you. EyesRhythm helps them work longer.**
+<p align="center">
+  <strong>An on-device blink companion for long screen days.</strong><br>
+  EyesRhythm uses your webcam to measure how often and how steadily you blink, and gently nudges you back to a healthy rhythm.
+</p>
+
+<p align="center">
+  <a href="https://github.com/pranaycv/EyeRhythm/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/pranaycv/EyeRhythm?label=release&color=5b9fe0"></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-5b9fe0">
+  <img alt="Python" src="https://img.shields.io/badge/python-3.10%E2%80%933.12-5b9fe0">
+  <a href="LICENSE"><img alt="License: PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-lightgrey"></a>
+</p>
+
+<p align="center">
+  <a href="https://eyesrhythm.com"><strong>Download</strong></a> ·
+  <a href="#features">Features</a> ·
+  <a href="#build-from-source">Build from source</a> ·
+  <a href="docs/CODE_GUIDE.md">Code guide</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
 
 <p align="center">
   <img src="website/public/images/glimpse.jpg" alt="EyesRhythm at a glance: the companion dashboard with Trace, Poise, avatars, practice, reports, and the visual alert" width="920">
 </p>
 
-Every day millions of knowledge workers, students and creators spend hours staring at screens. Research from the American Academy of Ophthalmology shows that the spontaneous blink rate drops by **half or more** during computer use. Fewer blinks → dry eyes, fatigue, blurred vision, and the classic symptoms of Computer Vision Syndrome.
+## Why EyesRhythm
 
-EyesRhythm is a lightweight, **on-device** companion that quietly watches your blink rate through the built-in webcam and gently nudges you back toward a healthy rhythm (~15–20 blinks per minute). No accounts, no cloud, no analytics, no video ever leaves your machine.
+Focused screen work lowers the spontaneous blink rate and makes blinking less complete and less regular. Over time this can contribute to dryness, fatigue, and blurred vision. It usually goes unnoticed until the eyes already hurt.
 
-Official **macOS and Windows** copies are free to download at [eyesrhythm.com](https://eyesrhythm.com). There is no account and no license key. The app stays on your computer.
+EyesRhythm runs quietly next to your work. It counts blinks with the built-in or USB webcam and turns rate and regularity into one score, the **Ocular Rhythm Index (ORI)**. It also helps you build a steadier habit of about 15–20 blinks per minute.
 
-The source in this tree is under the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0). You may use, modify, and share it for a noncommercial purpose, provided you keep `LICENSE`, the required notice below, and the third-party notices in `THIRD_PARTY_NOTICES.md`. Commercial use is not included. Third-party libraries keep their own licenses.
+- **Private by design.** Everything runs on your computer. No account, no cloud, no analytics. Camera frames are never uploaded or recorded.
+- **Free for macOS and Windows.** Official installers are available at [eyesrhythm.com](https://eyesrhythm.com) and on the [releases page](https://github.com/pranaycv/EyeRhythm/releases/latest).
 
-Required Notice: Copyright Pranay Soni (https://github.com/pranaycv)
+> [!NOTE]
+> EyesRhythm is a wellness companion, not a medical device. It is not intended to diagnose, treat, cure, or prevent any disease. If you have persistent eye discomfort or changes in vision, see an eye-care professional.
 
-> **Privacy first.** EyesRhythm runs on this computer. Camera frames are not uploaded. Local JSON under `~/.eyerhythm_blinkcounter/` holds today’s blink count and screen-time minutes (resets at midnight), plus an optional research log of inter-blink interval stats per screen-time hour.
+## Features
 
----
+| | |
+|---|---|
+| **Ocular Rhythm Index** | A 0–100 score that combines blink rate (70%) and blink regularity (30%). |
+| **Companion views** | Pick an avatar (Atlas, Lumen, or Vesper) that mirrors your blinks, a camera preview (Lens), a live five-minute ORI graph (Trace), or a head-direction dial (Poise). |
+| **Poise** | Shows which directions your head has turned today in 30° slices, so the neck and shoulders get regular changes of position. |
+| **Alerts** | Always on. Choose a quiet orange pulse (Visual, the default) or a short tone (Sound) when ORI stays below your threshold. You can also turn on a click for every blink. |
+| **Practice** | A guided two-minute session that paces your blinks and eye movement. |
+| **Reports** | Daily, weekly, and monthly charts of ORI and screen time. |
+| **Smart camera use** | 30 fps while you are in view, 1 fps when you look away, and the camera turns off when you leave the desk. |
+| **Multiple cameras** | Use one webcam, or Hybrid mode to combine every desk camera. |
 
-## What you see
-
-A compact **React dashboard** (not full-screen by default):
-
-| Element | Meaning |
-|--------|---------|
-| **Live blink rate** | Continuous blinks/min over the recent window |
-| **Average rate** | Daily average = total blinks ÷ face-time minutes |
-| **Screen time** | How long a face has been in front of the screen today |
-| **FPS** | Camera pipeline throughput |
-| **Regularity** | How steady your inter-blink gaps are (0–100) |
-| **Reserved cards** | Placeholders for future metrics |
-| **Camera panel** | Collapsed by default; expand when you want a preview |
-
-Regularity is computed as:
-
-```text
-CV = (std of inter-blink gaps) ÷ (mean gap)
-Score = max(0, 100 − 100 × CV)
-```
-
----
-
-## Quick start
-
-### Prerequisites
-
-* **Python 3.10–3.12** (3.11 recommended)  
-* **Node.js 18+** (to build the UI once)  
-* Webcam + OS camera permission  
-
-### macOS / Linux
-
-```bash
-./for_mac/setup.sh                 # venv + Python deps + React build
-./for_mac/run.sh                   # launches the desktop window
-./for_mac/install_autostart.sh     # optional: open at every login
-```
-
-First launch: allow **Camera** permission  
-(System Settings → Privacy & Security → Camera).
-
-To stop opening at login: `./for_mac/uninstall_autostart.sh`.
-
-### Windows
-
-Share **`EyesRhythm-Windows.zip`** (built by GitHub Actions or `for_windows/for_developers/build_exe.bat`). Recipients unzip and double-click `EyesRhythm.exe` — no Python or Node.
-
-All Windows helpers live under **[`for_windows/`](for_windows/)**.
-
-* **Share / use the app** → unzip `EyesRhythm-Windows.zip` and run `EyesRhythm.exe`. Details in [`for_windows/`](for_windows/).
-* **From source** → [`for_windows/just_use_for_nondevelopers/`](for_windows/just_use_for_nondevelopers/) (needs Python once).
-* **Rebuild the zip / installer** → [`for_windows/for_developers/`](for_windows/for_developers/) or **Actions → Build Windows app**.
-
-### Developer (UI hot reload)
-
-```bash
-# Terminal 1 — engine + API
-source EyeRhythm/bin/activate   # or your venv
-python -m app.main --browser
-
-# Terminal 2 — Vite
-cd frontend && npm install && npm run dev
-```
-
-Open the Vite URL (proxies `/api` and `/ws` to the Python server).
-
----
-
-## Keyboard shortcuts (dashboard focused)
+### Keyboard shortcuts
 
 | Key | Action |
 |-----|--------|
-| **B** | Toggle beep on every counted blink |
-| **A** | Toggle alert (beeps after ORI is below 50 for 3 min in the last 5 min) |
-| **D** | More / Less (compact companion vs full dashboard) |
-| **W** | Settings / Hide settings (Reports beside the companion) |
-| **C** | Switch Lens camera preview |
+| <kbd>B</kbd> | Beep on every counted blink |
+| <kbd>A</kbd> | Switch the alert between Visual and Sound |
+| <kbd>P</kbd> | Start or stop Practice |
+| <kbd>D</kbd> | Switch between the compact and full dashboard |
+| <kbd>W</kbd> | Show or hide the Settings and Reports panel |
+| <kbd>C</kbd> | Switch to or from the Lens camera preview |
 
-Close the window to quit (or Ctrl+C in browser mode).
+## Install
 
----
+Download the installer for your computer from [eyesrhythm.com](https://eyesrhythm.com) or the [latest release](https://github.com/pranaycv/EyeRhythm/releases/latest).
 
-## Architecture
+- **macOS:** open the `.dmg` and drag EyesRhythm into Applications.
+- **Windows:** run `EyesRhythm-Setup-<version>.exe`. It installs for your user account only and does not need administrator rights.
 
-* **`blink_core/`** — blink detection + daily stats (platform-independent)  
-* **`app/`** — camera engine, local FastAPI server, desktop window  
-* **`frontend/`** — React + TypeScript + Vite UI  
+Allow camera access when the system asks. On macOS you can change this later in **System Settings → Privacy & Security → Camera**.
 
-The default window is small and resizable. Maximising scales typography and layout with the viewport. Works on **macOS and Windows** (Linux supported via browser or pywebview).
+## Build from source
 
----
+### Prerequisites
 
-## Libraries and licenses
+- Python 3.10–3.12 (3.11 recommended)
+- Node.js 18 or later (to build the interface)
+- A webcam and camera permission for your terminal or Python
 
-EyesRhythm’s own code is under the PolyForm Noncommercial License 1.0.0.
-Third-party libraries keep their own licenses. Those terms are what allow
-the packaged app to include them. None of them re-license EyesRhythm’s code.
+### macOS and Linux
 
-See **[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)** (also in
-Settings → About, and inside every freeze). Full texts live in `licenses/`.
-
-| Component | License | In the app |
-|-----------|---------|------------|
-| EyesRhythm source | PolyForm Noncommercial 1.0.0 | Yes |
-| MediaPipe + Face Landmarker model | Apache 2.0 | Yes |
-| OpenCV | Apache 2.0 | Yes |
-| FFmpeg (inside the OpenCV wheel) | LGPLv2.1 | Yes — replaceable library, notice required |
-| NumPy | BSD-3-Clause | Yes |
-| FastAPI, Pydantic, React, Vite | MIT | Yes |
-| Uvicorn, pywebview | BSD-3-Clause | Yes |
-| Inter font | SIL OFL 1.1 | Bundled with the app, not sold alone |
-| PyInstaller | GPL-2.0 with freeze exception | Build tool only |
-
-Packaged copies include `LICENSE`, `THIRD_PARTY_NOTICES.md`, and `licenses/`.
-FFmpeg remains a separate shared library (typically
-`opencv_videoio_ffmpeg*.dll` on Windows) so it can be substituted, as LGPL
-asks.
-
-The alert tone (`alert.mp3`) is the Sound-mode cue shipped with EyesRhythm. Practice
-quotations (`quotes.json`) are from the original list, limited to
-public-domain authors.
-
----
-
-## Project layout
-
-```
-EyeRhythm/
-├── app/                 # engine + local API + window
-├── blink_core/          # blink detection & screen-time
-├── frontend/            # React UI (source + dist/)
-├── models/              # MediaPipe face landmarker
-├── assets/              # logo + brand assets + Inter (OFL)
-├── licenses/            # Apache 2.0, LGPLv2.1, SIL OFL texts
-├── THIRD_PARTY_NOTICES.md
-├── docs/CODE_GUIDE.md   # map of the codebase
-├── for_mac/             # setup / run / login-start helpers
-├── for_windows/         # launchers + packaging
-├── requirements.txt
-└── run_app.py           # packaging entry-point
+```bash
+./for_mac/setup.sh     # create the virtual environment, install dependencies, build the UI
+./for_mac/run.sh       # launch the desktop window
 ```
 
-### Contributors
+To open EyesRhythm when you log in, run `./for_mac/install_autostart.sh`. To turn that off, run `./for_mac/uninstall_autostart.sh`. See [`for_mac/README.md`](for_mac/README.md) for more, including how to build a standalone `.app`.
 
-Start with **[`docs/CODE_GUIDE.md`](docs/CODE_GUIDE.md)**, then `app/engine.py` and `blink_core/detector.py`.
+### Windows
 
----
+See [`for_windows/README.md`](for_windows/README.md). It covers running from source, building the portable app and installer on a Windows PC, and using the **Build Windows app** GitHub Actions workflow.
 
-## Feedback & sharing
+### Development with hot reload
 
-If the counter feels off for you, or you have ideas for the reserved metric cards, please write to [hello@eyesrhythm.com](mailto:hello@eyesrhythm.com). If EyesRhythm is useful, share it — a regular blink habit is one of the easiest gifts we can give our eyes.
+```bash
+# Terminal 1: engine and local API
+source EyeRhythm/bin/activate
+python -m app.main --browser
 
-EyesRhythm is a wellness companion, not a medical device. It is not intended to diagnose, treat, cure, or prevent disease.
+# Terminal 2: React UI
+cd frontend
+npm install
+npm run dev
+```
 
-Official copies: [eyesrhythm.com](https://eyesrhythm.com). Source: [github.com/pranaycv/EyeRhythm](https://github.com/pranaycv/EyeRhythm). Source terms: [`LICENSE`](LICENSE). Third-party terms: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+Open the URL Vite prints. It proxies `/api` and `/ws` to the Python server on `127.0.0.1:8742`.
+
+### Tests
+
+```bash
+python -m unittest discover -s tests
+```
+
+## How it works
+
+```
+Webcam ─▶ MediaPipe Face Landmarker ─▶ blink detector ─▶ engine ─▶ local API ─▶ React UI
+                                        (blink_core/)    (app/)    (FastAPI,    (frontend/)
+                                                                    WebSocket)
+```
+
+Regularity measures how even the gaps between blinks are:
+
+```text
+CV         = standard deviation of inter-blink gaps ÷ mean gap
+Regularity = max(0, 100 − 100 × CV)
+ORI        = 70% rate score + 30% regularity
+```
+
+Daily totals, ORI history, and preferences are stored as JSON in `~/.eyerhythm_blinkcounter/`. Nothing in that folder leaves your computer. See [`docs/CODE_GUIDE.md`](docs/CODE_GUIDE.md) for the frame pipeline, file formats, and settings.
+
+## Project structure
+
+```
+├── app/              Camera engine, local API, desktop window
+├── blink_core/       Blink detection and screen-time tracking
+├── frontend/         React + TypeScript + Vite interface
+├── models/           MediaPipe Face Landmarker model
+├── assets/           App icons and the Inter font
+├── tests/            Unit tests
+├── tools/            Developer utilities (signal analysis, screenshot capture)
+├── docs/             Code guide
+├── for_mac/          macOS and Linux setup, run, and build scripts
+├── for_windows/      Windows launchers, freeze, and installer scripts
+├── website/          Marketing site (Astro)
+├── licenses/         Full texts of third-party licenses
+├── EyeRhythm.spec    PyInstaller configuration
+└── run_app.py        Entry point for packaged builds
+```
+
+## Research
+
+The rate and regularity measures are informed by published work on blinking during screen use, including:
+
+- Johnston PR, Rodriguez J, Lane KJ, Ousler G, Abelson MB. *The interblink interval in normal and dry eye subjects.* Clinical Ophthalmology. 2013;7:253–259. [doi:10.2147/OPTH.S39104](https://doi.org/10.2147/OPTH.S39104)
+- Cardona G, Argilés M, Pérez-Cabré E. *Loss of blink regularity and its impact on ocular surface exposure.* Diagnostics. 2023;13(14):2362. [doi:10.3390/diagnostics13142362](https://doi.org/10.3390/diagnostics13142362)
+- Wang MTM, Power B, Xue AL, Craig JP. *Blink completeness and rate in dry eye disease: an investigator-masked, prospective registry-based, cross-sectional, prognostic study.* Contact Lens and Anterior Eye. 2025;48:102369. [doi:10.1016/j.clae.2025.102369](https://doi.org/10.1016/j.clae.2025.102369)
+
+## Contributing
+
+Bug reports and ideas are welcome. Please read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening an issue or pull request. To report a security issue, follow [`SECURITY.md`](SECURITY.md) instead of opening a public issue.
+
+## License
+
+EyesRhythm’s source code is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). You may use, modify, and share it for any noncommercial purpose, provided you keep `LICENSE`, the required notice below, and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Commercial use is not permitted under this license.
+
+Required Notice: Copyright Pranay Soni (https://github.com/pranaycv)
+
+Third-party components keep their own licenses. Packaged builds include `LICENSE`, `THIRD_PARTY_NOTICES.md`, and the full texts in [`licenses/`](licenses/).
+
+| Component | License |
+|-----------|---------|
+| MediaPipe and the Face Landmarker model | Apache 2.0 |
+| OpenCV | Apache 2.0 |
+| FFmpeg (inside the OpenCV wheel) | LGPLv2.1, shipped as a replaceable shared library |
+| NumPy, Uvicorn, pywebview | BSD-3-Clause |
+| FastAPI, Pydantic, React, Vite | MIT |
+| Inter font | SIL Open Font License 1.1 |
+| PyInstaller (build tool only) | GPL-2.0 with bootloader exception |
+
+The Sound-mode alert tone (`alert.mp3`) is original to EyesRhythm. Practice quotations in `quotes.json` are limited to public-domain authors.
+
+## Contact
+
+Questions and feedback: [hello@eyesrhythm.com](mailto:hello@eyesrhythm.com) · Website: [eyesrhythm.com](https://eyesrhythm.com)

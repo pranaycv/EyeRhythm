@@ -111,8 +111,8 @@ must not be sold on their own. Reserved font name: Inter. Full text:
 
 ## Original assets in this copy
 
-- `alert.mp3` — Sound-mode alert cue shipped with EyesRhythm (the
-  provided `beep alert.mp3`). `alert.wav` is kept as a fallback only.
+- `alert.mp3` — original Sound-mode alert cue shipped with EyesRhythm.
+  `alert.wav` is kept as a fallback only.
 - Practice quotations in `quotes.json` — taken from the original
   EyesRhythm list, limited to public-domain authors (ancient writers, or
   authors who died in 1925 or earlier). Living and still-in-copyright
@@ -120,7 +120,7 @@ must not be sold on their own. Reserved font name: Inter. Full text:
 
 ---
 
-## Your product
+## Medical disclaimer
 
 EyesRhythm is a wellness companion, not a medical device. It is not
 intended to diagnose, treat, cure, or prevent disease.
