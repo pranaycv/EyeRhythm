@@ -1,6 +1,0 @@
-EyesRhythm for macOS
-
-This is a placeholder file, not the app.
-After payment, Dodo emails your unique license key.
-The real macOS installer will replace this file before checkout goes live.
-On first launch, paste the key (internet once). After that the app stays on this computer.

@@ -1,0 +1,75 @@
+name: Bug report
+description: Report something that does not work as expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem. For security issues, email hello@eyesrhythm.com instead (see SECURITY.md).
+        Please do not attach photos or video of your face.
+  - type: input
+    id: version
+    attributes:
+      label: EyesRhythm version
+      description: Shown in Settings → About.
+      placeholder: "1.6.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Windows
+        - Linux (from source)
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      placeholder: "macOS 15.1 / Windows 11 24H2"
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run EyesRhythm?
+      options:
+        - Installer (.dmg / Setup.exe)
+        - Portable Windows zip
+        - From source
+    validations:
+      required: true
+  - type: dropdown
+    id: camera
+    attributes:
+      label: Camera setup
+      options:
+        - Built-in webcam
+        - USB webcam
+        - Hybrid (several cameras)
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected to happen instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open EyesRhythm
+        2. Press W
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        macOS: ~/Library/Logs/EyesRhythm.log and EyesRhythm_crash.log
+        Windows: %LOCALAPPDATA%\EyesRhythm\crash.log and runtime.log
+      render: text

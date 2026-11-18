@@ -4,7 +4,7 @@ app — desktop shell + local API for EyesRhythm
 
 Modules
 -------
-* ``version``      – product SemVer (currently 1.5.0)
+* ``version``      – product SemVer (currently 1.6.0)
 * ``main``         – process entry: engine + HTTP server + window
 * ``engine``       – camera loop, blink pipeline, beeps/alerts (business logic)
 * ``camera_idle``  – battery: 1 min no-face → camera off; peek every 2 min

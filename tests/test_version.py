@@ -13,10 +13,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class VersionTests(unittest.TestCase):
-    def test_release_is_semver_1_5_0(self) -> None:
-        self.assertEqual(VERSION, "1.5.0")
+    def test_release_is_semver_1_6_0(self) -> None:
+        self.assertEqual(VERSION, "1.6.0")
         self.assertRegex(VERSION, r"^\d+\.\d+\.\d+$")
-        self.assertEqual(version_tuple(), (1, 5, 0, 0))
+        self.assertEqual(version_tuple(), (1, 6, 0, 0))
 
     def test_package_dunder_version(self) -> None:
         import app

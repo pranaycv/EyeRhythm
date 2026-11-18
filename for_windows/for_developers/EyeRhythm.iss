@@ -7,7 +7,7 @@
 
 #define MyAppName "EyesRhythm"
 ; Keep in lockstep with app/version.py (tests/test_version.py checks this).
-#define MyAppVersion "1.5.0"
+#define MyAppVersion "1.6.0"
 #define MyAppPublisher "EyesRhythm Contributors"
 #define MyAppURL "https://github.com/pranaycv/EyeRhythm"
 #define MyAppExeName "EyesRhythm.exe"

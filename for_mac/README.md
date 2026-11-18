@@ -1,17 +1,21 @@
-# EyesRhythm on macOS / Linux
+# EyesRhythm on macOS and Linux
 
-Everything Mac/Linux-related lives in this folder.
+This folder contains the scripts for running EyesRhythm from source on macOS or Linux, and for building the macOS app.
 
-```
-for_mac/
-├── README.md              ← this file
-├── setup.sh               ← one-time: create venv + install deps
-├── run.sh                 ← launch the app from source
-├── install_autostart.sh   ← open EyesRhythm automatically at login
-├── uninstall_autostart.sh ← turn that off
-├── start_at_login.sh      ← used by the login item (do not run by hand)
-└── build_mac.sh           ← optional: build a standalone .app
-```
+If you only want to use EyesRhythm, download the installer from [eyesrhythm.com](https://eyesrhythm.com) instead.
+
+| Script | Purpose |
+|--------|---------|
+| `setup.sh` | One-time setup: create the virtual environment and install dependencies |
+| `run.sh` | Launch the app from source |
+| `install_autostart.sh` | Open EyesRhythm automatically at login |
+| `uninstall_autostart.sh` | Stop opening at login |
+| `start_at_login.sh` | Used by the login item; do not run it directly |
+| `build_mac.sh` | Build a standalone `dist/EyesRhythm.app` |
+| `make_app_icon.sh` | Generate the app icons from `assets/logo.svg` |
+| `build_dmg.sh` | Build the app and package it as `dist/EyesRhythm.dmg` in one step |
+| `make_dmg.sh` | Wrap an existing `dist/EyesRhythm.app` in a `.dmg` |
+| `run_license_test.sh` | Test the optional license gate against the payment provider's test mode |
 
 ---
 
@@ -93,13 +97,16 @@ python -m app.main --skip-checks       # skip the startup self-check
 
 ## 4. Keyboard shortcuts
 
-| Key       | Action                          |
-|-----------|---------------------------------|
-| Q / Esc   | Quit                            |
-| B         | Beep on every blink ON/OFF      |
-| A         | Low-rate alert ON/OFF           |
-| D         | More / Less (compact window)    |
-| W         | Settings / Hide settings        |
+| Key | Action |
+|-----|--------|
+| B | Beep on every counted blink |
+| A | Switch the alert between Visual and Sound |
+| P | Start or stop Practice |
+| D | Switch between the compact and full dashboard |
+| W | Show or hide the Settings and Reports panel |
+| C | Switch to or from the Lens camera preview |
+
+Close the window to quit.
 
 ---
 
@@ -133,9 +140,9 @@ You must rebuild. Editing Python / React files does **not** update an already-bu
 4. Double-click `dist/EyesRhythm.app` and confirm it works.
 5. Right-click `EyesRhythm.app` → **Compress**, and send only that zip.
 
-Do not send the project folder, `build/`, or `.venv`.
+Do not send the project folder, `build/`, or the virtual environment.
 
-(Advanced code-signing / notarization is outside the scope of this tree.)
+Code signing and notarization are not covered by these scripts.
 
 ---
 
@@ -147,6 +154,4 @@ Do not send the project folder, `build/`, or `.venv`.
 | Black / no camera               | Close Zoom, Teams, browser tabs that use the webcam; check System Settings → Camera |
 | “Model file not found”          | Confirm `models/face_landmarker.task` exists (≈ 3.7 MB) |
 | App starts then immediately exits | Look for a crash log at `~/Library/Logs/EyesRhythm_crash.log` |
-| Double-click `.app` shows Retry / Ignore / Report | The bundle was missing `NSCameraUsageDescription`. Rebuild with `./for_mac/build_mac.sh` (the script now stamps the camera privacy key). |
-
-That’s everything required to run EyesRhythm on a Mac or Linux machine.
+| Double-click `.app` shows Retry / Ignore / Report | The bundle is missing `NSCameraUsageDescription`. Rebuild with `./for_mac/build_mac.sh`, which adds the camera privacy key. |

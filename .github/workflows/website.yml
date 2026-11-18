@@ -79,12 +79,16 @@ jobs:
           PUBLIC_SITE_URL: ${{ env.PUBLIC_SITE_URL }}
 
       - name: Upload dist
+        # Preview deploys still share this artifact. A full Actions storage
+        # quota must not block the production publish below.
+        continue-on-error: true
+        id: upload
         uses: actions/upload-artifact@v4
         with:
           name: website-dist
           path: website/dist
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
 
   deploy-preview:
     name: Preview
@@ -157,11 +161,25 @@ jobs:
       name: website-production
       url: ${{ steps.deploy.outputs.deployment-url }}
     steps:
-      - name: Fetch dist
-        uses: actions/download-artifact@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          name: website-dist
-          path: dist
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install
+        working-directory: website
+        run: npm ci
+
+      - name: Build
+        working-directory: website
+        run: npm run build
+        env:
+          PUBLIC_SITE_URL: ${{ env.PUBLIC_SITE_URL }}
 
       - name: Ensure Pages project exists
         continue-on-error: true
@@ -177,4 +195,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: website
           command: pages deploy dist --project-name=${{ env.CF_PROJECT }} --branch=main --commit-dirty=true

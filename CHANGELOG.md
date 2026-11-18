@@ -1,4 +1,24 @@
-# EyesRhythm release notes
+# Changelog
+
+All notable changes to EyesRhythm are documented in this file. Versions follow [Semantic Versioning](https://semver.org/), and the version number lives in `app/version.py`.
+
+## 1.6.0 — 7 November 2026
+
+### Changed
+
+- EyesRhythm’s source code is now licensed under the PolyForm Noncommercial License 1.0.0. Noncommercial use is allowed; commercial use is not included.
+- Required Notice: Copyright Pranay Soni (https://github.com/pranaycv)
+
+### Files
+
+The official downloads are the 1.6.0 installers attached to the GitHub release.
+
+| Platform | Installer |
+|----------|-----------|
+| macOS | `EyesRhythm-1.6.0.dmg` |
+| Windows | `EyesRhythm-Setup-1.6.0.exe` |
+
+---
 
 ## 1.5.0 — 2 November 2026
 
