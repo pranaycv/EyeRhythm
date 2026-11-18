@@ -14,7 +14,7 @@
 const comingSoonPublic = false;
 
 const DOWNLOAD_BASE =
-  "https://github.com/pranaycv/EyeRhythm/releases/download/v1.6.0";
+  "https://github.com/pranaycv/EyeRhythm/releases/download/v1.7.0";
 
 export const site = {
   name: "EyesRhythm",
@@ -38,19 +38,19 @@ export const site = {
     cadence: "free",
     updates: "Free for Mac and Windows",
   },
-  version: "1.6.0",
+  version: "1.7.0",
   recommendedMachine:
     "Tested on Intel Core i7 and on Mac processors. We recommend this configuration.",
   downloads: {
     mac: {
-      href: `${DOWNLOAD_BASE}/EyesRhythm-1.6.0.dmg`,
-      file: "EyesRhythm-1.6.0.dmg",
+      href: `${DOWNLOAD_BASE}/EyesRhythm-1.7.0.dmg`,
+      file: "EyesRhythm-1.7.0.dmg",
       size: "93 MB",
       label: "macOS",
     },
     windows: {
-      href: `${DOWNLOAD_BASE}/EyesRhythm-Setup-1.6.0.exe`,
-      file: "EyesRhythm-Setup-1.6.0.exe",
+      href: `${DOWNLOAD_BASE}/EyesRhythm-Setup-1.7.0.exe`,
+      file: "EyesRhythm-Setup-1.7.0.exe",
       size: "85 MB",
       label: "Windows",
     },

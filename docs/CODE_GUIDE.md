@@ -48,7 +48,7 @@ Blink data is not uploaded. Privacy is by design. Camera preview is collapsed by
 
 | Path | Role |
 |------|------|
-| `app/version.py` | Product SemVer (`1.6.0`) |
+| `app/version.py` | Product SemVer (`1.7.0`) |
 | `app/main.py` | Start engine + HTTP + desktop window |
 | `app/engine.py` | Camera, detector, stats, beeps/alerts |
 | `app/camera_idle.py` | Battery: 1 min no-face → camera off; peek every 2 min; 30 s confirm |
