@@ -156,6 +156,8 @@ button {
   pointer-events: none;
   border-radius: inherit;
   background: rgba(255, 140, 40, 0.38);
+  /* 3s matches app.engine.ALERT_ORANGE_PULSE_S. The center icon is timed
+     to the orange peak of this loop (halfway). */
   animation: alert-glow-pulse 3s ease-in-out infinite;
 }
 
@@ -216,6 +218,7 @@ button {
 }
 
 .er-logo.is-alert-pulse .er-logo__mark {
+  /* Same 3s period as alert-glow-pulse / ALERT_ORANGE_PULSE_S. */
   animation: er-logo-alert-pulse 3s ease-in-out infinite;
 }
 
@@ -2339,6 +2342,60 @@ button {
 
 .settings__field {
   display: block;
+}
+
+.settings__switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.settings__switch-track {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 999px;
+  background: #d5dee8;
+  position: relative;
+  transition: background 0.15s ease;
+}
+
+.settings__switch.is-on .settings__switch-track {
+  background: var(--blue);
+}
+
+.settings__switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(30, 48, 72, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.settings__switch.is-on .settings__switch-knob {
+  transform: translateX(14px);
+}
+
+.settings__check-copy {
+  display: block;
+  min-width: 0;
+}
+
+.settings__switch .settings__help {
+  margin-top: 4px;
 }
 
 .settings__select {

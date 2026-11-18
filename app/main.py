@@ -37,6 +37,7 @@ from app.engine import (  # noqa: E402
     resolve_startup_camera,
 )
 from app.server import run_server, UI_DIST  # noqa: E402
+from app.alert_overlay import bind_alert_overlay  # noqa: E402
 from app.tray_icon import bind_tray_icon  # noqa: E402
 
 # The dashboard talks to this machine only (never the internet).
@@ -400,6 +401,7 @@ def _open_webview(
 
     engine.on_ontop_change(apply_ontop)
     tray = bind_tray_icon(window, engine)
+    overlay = bind_alert_overlay(engine)
 
     def on_resized():
         if api._splash_active:
@@ -416,6 +418,10 @@ def _open_webview(
             pass
         try:
             tray.stop()
+        except Exception:
+            pass
+        try:
+            overlay.stop()
         except Exception:
             pass
 

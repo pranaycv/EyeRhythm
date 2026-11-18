@@ -14,7 +14,14 @@
  * restored from local preferences.
  */
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
-import { fetchLicense, fetchPreferences, savePreferences, setToggle, wakeCamera } from "./api";
+import {
+  fetchCameras,
+  fetchLicense,
+  fetchPreferences,
+  savePreferences,
+  setToggle,
+  wakeCamera,
+} from "./api";
 import { useAppVersion } from "./hooks/useAppVersion";
 import { LicenseScreen } from "./components/LicenseScreen";
 import {
@@ -71,8 +78,10 @@ export default function App() {
   const [compact, setCompact] = useState(false);
   const [dock, setDock] = useState(false);
   const [prefsReady, setPrefsReady] = useState(false);
-  // Launch splash: camera pick (if several webcams), comfort check, notices.
-  const [splashOpen, setSplashOpen] = useState(true);
+  // pending → splash (comfort + notices) | camera (pick only) | app.
+  const [launchGate, setLaunchGate] = useState<
+    "pending" | "splash" | "camera" | "app"
+  >("pending");
   // The license gate is off unless this copy was started with it forced on.
   const [licenseGate, setLicenseGate] = useState<"pending" | "needed" | "ok">(
     "pending",
@@ -136,23 +145,44 @@ export default function App() {
   // Restore last avatar (and confirm prefs API is up).
   useEffect(() => {
     let cancelled = false;
+    let skip = false;
     (async () => {
       try {
         const prefs = await fetchPreferences();
-        if (!cancelled) {
-          setAvatarId(asAvatarId(prefs.avatar));
-          if (typeof prefs.eye_comfort === "string") {
-            setEyeComfort(prefs.eye_comfort);
-          }
-          // Every launch is the default GUI: More, settings panel closed.
-          setCompact(false);
-          setDock(false);
+        if (cancelled) return;
+        setAvatarId(asAvatarId(prefs.avatar));
+        if (typeof prefs.eye_comfort === "string") {
+          setEyeComfort(prefs.eye_comfort);
         }
+        // Every launch is the default GUI: More, settings panel closed.
+        setCompact(false);
+        setDock(false);
+        skip = Boolean(prefs.skip_startup_screens);
       } catch {
-        /* keep default */
-      } finally {
-        if (!cancelled) setPrefsReady(true);
+        /* keep default: show the startup screens */
+        skip = false;
       }
+      if (cancelled) return;
+      setPrefsReady(true);
+      // Decide from this fetch. A later render can still be holding "off"
+      // and would put the comfort and notices screens back up.
+      if (!skip) {
+        setLaunchGate("splash");
+        return;
+      }
+      let needsCamera = false;
+      try {
+        const cams = await fetchCameras();
+        needsCamera = Boolean(cams.pick_required && cams.cameras.length > 1);
+      } catch {
+        needsCamera = false;
+      }
+      if (cancelled) return;
+      if (needsCamera) {
+        setLaunchGate("camera");
+        return;
+      }
+      setLaunchGate("app");
     })();
     return () => {
       cancelled = true;
@@ -195,10 +225,16 @@ export default function App() {
     void setDockLayout(false);
   }, []);
 
+  // Open the camera once the startup screens are done or were skipped.
+  useEffect(() => {
+    if (licenseGate !== "ok" || launchGate !== "app") return;
+    void wakeCamera();
+  }, [licenseGate, launchGate]);
+
   // Hug compact content, and grow the expanded window so Information &
   // Quote (and the other left-column cards) are not clipped.
   useLayoutEffect(() => {
-    if (splashOpen || licenseGate !== "ok") return;
+    if (launchGate !== "app" || licenseGate !== "ok") return;
     let cancelled = false;
     const id = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
@@ -218,12 +254,12 @@ export default function App() {
       cancelled = true;
       window.cancelAnimationFrame(id);
     };
-  }, [compact, splashOpen, dock, licenseGate]);
+  }, [compact, launchGate, dock, licenseGate]);
 
   // Keyboard shortcuts (same letters shown on the bottom buttons).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (splashOpen || licenseGate !== "ok") return;
+      if (launchGate !== "app" || licenseGate !== "ok") return;
       const t = e.target as HTMLElement | null;
       // Do not steal keys while someone is typing in a field.
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
@@ -239,7 +275,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [avatarId, compact, dock, persistAvatar, persistCompact, persistDock, splashOpen, licenseGate]);
+  }, [avatarId, compact, dock, persistAvatar, persistCompact, persistDock, launchGate, licenseGate]);
 
   // Colour of each card: good / warn / bad / idle based on the live number.
   // “—” means we do not have a number yet (no face, or still warming up).
@@ -465,17 +501,20 @@ export default function App() {
         />
       ) : null}
 
-      {licenseGate === "ok" && splashOpen ? (
+      {licenseGate === "ok" &&
+      (launchGate === "splash" || launchGate === "camera") ? (
         <SplashScreen
+          cameraOnly={launchGate === "camera"}
           onDone={(comfort) => {
             if (comfort) setEyeComfort(comfort);
-            setSplashOpen(false);
+            setLaunchGate("app");
             void wakeCamera();
           }}
         />
       ) : null}
 
-      {licenseGate === "pending" ? (
+      {licenseGate === "pending" ||
+      (licenseGate === "ok" && launchGate === "pending") ? (
         <div className="splash" role="status" aria-live="polite">
           <div className="splash__panel">
             <header className="splash__head">
@@ -483,7 +522,9 @@ export default function App() {
               <div className="splash__brand">
                 <div className="splash__title">EyesRhythm</div>
                 <div className="splash__tag">
-                  Checking this copy{version ? ` · ${version}` : "…"}
+                  {licenseGate === "pending"
+                    ? `Checking this copy${version ? ` · ${version}` : "…"}`
+                    : "Opening…"}
                 </div>
               </div>
             </header>

@@ -8,6 +8,9 @@ Two signals that stay visible when the window is hidden:
 * **Each counted blink** — the eye closes for a beat, so detection is
   obvious even while the app is minimized.
 
+Visual mode also shows a matching translucent icon in the centre of every
+display three times a minute (see ``app.alert_overlay``).
+
 macOS updates the Dock app icon (and the minimized-window tile).
 Windows updates the window icon and, while minimized, the taskbar flash.
 """

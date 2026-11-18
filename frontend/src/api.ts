@@ -27,6 +27,8 @@ export interface Preferences {
   ontop: boolean;
   /** Last splash self-check: comfortable | mild | moderate | marked | decline */
   eye_comfort?: string;
+  /** Skip the comfort check and the Before-you-start notes on the next launch. */
+  skip_startup_screens?: boolean;
   dock?: boolean;
   ori_threshold?: number;
   alert_low_minutes?: number;
@@ -217,6 +219,8 @@ export async function savePreferences(
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
+    // Survive the window closing immediately after the click.
+    keepalive: true,
   });
   if (!res.ok) throw new Error("preferences save failed");
   return res.json();

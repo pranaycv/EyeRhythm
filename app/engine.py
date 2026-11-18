@@ -90,6 +90,16 @@ ALERT_POLL_S = 0.5
 # Once a Sound-mode cue has played, wait this long before the next one while
 # ORI is still below the threshold. Latch flicker must not restart the timer.
 ALERT_BEEP_INTERVAL_S = 60.0
+# Visual center icon: about 3 shows per minute while the low-ORI latch holds.
+# Separate from the sound metronome so a faster icon does not beep more often.
+# Shows land on the in-app orange peak (see ALERT_ORANGE_PULSE_S), so the
+# gap is the first orange peak that is at least this many seconds later.
+ALERT_VISUAL_CUE_INTERVAL_S = 20.0
+# In-app glow and logo pulse (frontend alert-glow-pulse / er-logo-alert-pulse).
+# The center icon is shown on this cycle's orange peak, not while the logo is blue.
+ALERT_ORANGE_PULSE_S = 3.0
+# Halfway through the cycle the app is orange. A shorter latch never gets there.
+ALERT_VISUAL_CUE_HOLD_S = ALERT_ORANGE_PULSE_S / 2.0
 # After a fresh start (or face return after a long break), rate (and therefore
 # ORI) is still filling its 60 s window and would look artificially low.
 # Suppress alert beeps for this long so we act on real data only.
@@ -915,7 +925,11 @@ class AlertMonitor:
     still qualifies.
 
     Sound cues fire at most once every ``ALERT_BEEP_INTERVAL_S`` (60 s) after
-    the first beep. Brief face / ORI flicker does not reset that gap.
+    the first beep. The Visual center icon waits until the app's orange pulse
+    is actually up (``ALERT_ORANGE_PULSE_S``, peak at halfway), then repeats on
+    later orange peaks at least ``ALERT_VISUAL_CUE_INTERVAL_S`` apart. A blip
+    that ends before the app turns orange never shows the icon. Brief face /
+    ORI flicker does not reset the sound gap or the visual gap.
 
     Alert beeps are also suppressed for ``ALERT_WARMUP_S`` (default 60 s) after:
       * construction / first face of the session, and
@@ -929,7 +943,10 @@ class AlertMonitor:
         low_duration_s: float = ALERT_LOW_DURATION_S,
         poll_s: float = ALERT_POLL_S,
         on_alert_beep=None,
+        on_visual_cue=None,
         on_active=None,
+        visual_mode_on=None,
+        visual_interval_s: float = ALERT_VISUAL_CUE_INTERVAL_S,
         time_fn=time.monotonic,
     ):
         self._beeper = beeper
@@ -937,7 +954,12 @@ class AlertMonitor:
         self._low_duration_s = float(low_duration_s)
         self._poll_s = poll_s
         self._on_alert_beep = on_alert_beep
+        self._on_visual_cue = on_visual_cue
         self._on_active = on_active
+        # () -> bool. True while the chip is on Visual, so the icon phase
+        # matches the orange glow. None means "always visual" (tests).
+        self._visual_mode_on = visual_mode_on
+        self._visual_interval_s = float(visual_interval_s)
         self._time = time_fn
         self._lock = threading.Lock()
         self._ori: float | None = None
@@ -957,8 +979,12 @@ class AlertMonitor:
         self._trend: deque[tuple[float, float]] = deque()
         self._last_trend_sample_at: float | None = None
         self._active = False
-        # 0 = never beeped this process. Interval is measured from the last cue.
+        # 0 = never fired this process. Each interval is measured from its last cue.
         self._last_beep_mono = 0.0
+        self._last_visual_mono: float | None = None
+        # Monotonic time when this orange stretch started. None when the app
+        # is not in the orange alert. Cleared as soon as the latch drops.
+        self._visual_hold_since: float | None = None
 
     def update(self, ori: float | None, face_found: bool) -> None:
         """
@@ -1092,6 +1118,56 @@ class AlertMonitor:
         self._last_beep_mono = now
         return True
 
+    def anchor_visual_orange(self) -> None:
+        """
+        Line the center icon up with the moment the app starts turning orange.
+
+        Called when Visual alert becomes true in the UI. Does not move an
+        anchor that is already running, so a repeated emit cannot restart
+        the orange phase.
+        """
+        with self._lock:
+            if self._visual_hold_since is None:
+                self._visual_hold_since = self._time()
+
+    def _maybe_fire_visual_locked(self, now: float, orange: bool) -> bool:
+        """
+        True on an orange peak, and only while the app is actually orange.
+
+        ``orange`` is the low-ORI latch with Visual mode on — the same
+        condition that adds the in-app orange glow. The first show is the
+        halfway peak of that pulse. Later shows are the next peaks that are
+        at least ``visual_interval_s`` after the last one. A latch that drops
+        before the peak never shows the icon. Dropping it clears the phase
+        but does not restart the gap, so flicker cannot re-trigger early.
+        Caller holds the lock.
+        """
+        if not orange:
+            self._visual_hold_since = None
+            return False
+        if self._visual_hold_since is None:
+            self._visual_hold_since = now
+        first_peak = self._visual_hold_since + ALERT_VISUAL_CUE_HOLD_S
+        if now < first_peak:
+            return False
+        cycle = ALERT_ORANGE_PULSE_S
+        if cycle <= 0:
+            return False
+        # Round half away from zero (not bankers' round) so a sample exactly
+        # between two peaks does not snap to the earlier one.
+        k = int((now - first_peak) / cycle + 0.5)
+        if k < 0:
+            return False
+        peak = first_peak + cycle * k
+        # Ticks are ``_poll_s`` apart. A half-poll window hits each peak once.
+        if abs(now - peak) > (self._poll_s * 0.5 + 1e-9):
+            return False
+        last = self._last_visual_mono
+        if last is not None and (peak - last) < (self._visual_interval_s - 0.05):
+            return False
+        self._last_visual_mono = peak
+        return True
+
     def _on_face_reappeared(self, now: float) -> None:
         """Apply warmup after first face or after a long absence (caller holds lock)."""
         if not self._ever_had_face:
@@ -1163,27 +1239,49 @@ class AlertMonitor:
     def _run(self) -> None:
         """Wake every half-second: keep Alert latched while ORI is still low."""
         while not self._stop.is_set():
-            fire_beep = False
-            with self._lock:
-                now = self._time()
-                # Keep trend head fresh even between sparse camera frames.
-                if self._face_found and self._ori is not None:
-                    self._record_trend_sample(now, self._ori)
-                should = self._should_beep_locked(now)
-                changed = should != self._active
-                self._active = should
-                fire_beep = self._maybe_fire_alert_beep_locked(now, should)
-            if changed and self._on_active is not None:
-                try:
-                    self._on_active(should)
-                except Exception:
-                    pass
-            if fire_beep and self._on_alert_beep is not None:
-                try:
-                    self._on_alert_beep()
-                except Exception:
-                    pass
+            self._tick()
             self._stop.wait(self._poll_s)
+
+    def _tick(self) -> None:
+        """One alert poll: latch, sound metronome, and orange-peak icon."""
+        visual_on = True
+        if self._visual_mode_on is not None:
+            try:
+                visual_on = bool(self._visual_mode_on())
+            except Exception:
+                visual_on = False
+        fire_beep = False
+        fire_visual = False
+        changed = False
+        should = False
+        with self._lock:
+            now = self._time()
+            # Keep trend head fresh even between sparse camera frames.
+            if self._face_found and self._ori is not None:
+                self._record_trend_sample(now, self._ori)
+            should = self._should_beep_locked(now)
+            changed = should != self._active
+            self._active = should
+            fire_beep = self._maybe_fire_alert_beep_locked(now, should)
+            # Icon phase follows the orange glow, which is Visual-only.
+            fire_visual = self._maybe_fire_visual_locked(
+                now, bool(should) and visual_on
+            )
+        if changed and self._on_active is not None:
+            try:
+                self._on_active(should)
+            except Exception:
+                pass
+        if fire_beep and self._on_alert_beep is not None:
+            try:
+                self._on_alert_beep()
+            except Exception:
+                pass
+        if fire_visual and self._on_visual_cue is not None:
+            try:
+                self._on_visual_cue()
+            except Exception:
+                pass
 
 
 class PracticeCoach:
@@ -1448,7 +1546,9 @@ class EyeRhythmEngine:
             threshold=self._ori_threshold,
             low_duration_s=float(self._alert_low_minutes) * 60.0,
             on_alert_beep=self._note_alert_beep,
+            on_visual_cue=self._note_visual_cue,
             on_active=self._note_alert_active,
+            visual_mode_on=self._visual_mode_is_on,
         )
         self._ori_log = OriHistory()
         self._practice = PracticeCoach(
@@ -1541,6 +1641,7 @@ class EyeRhythmEngine:
         self._last_preview_at = 0.0
         self._ontop_listeners: list = []
         self._visual_alert_listeners: list = []
+        self._visual_alert_cue_listeners: list = []
         self._alert_active_listeners: list = []
         self._blink_pulse_listeners: list = []
 
@@ -2117,10 +2218,32 @@ class EyeRhythmEngine:
                 pass
 
     def _note_alert_beep(self) -> None:
-        """UI: red pulse on Alert dot when low-ORI alert beeps."""
+        """UI: red pulse on Alert dot when the Sound metronome fires."""
         with self._lock:
             self._last_alert_beep_at = time.time()
             self._snap.last_alert_beep_at = self._last_alert_beep_at
+
+    def _visual_mode_is_on(self) -> bool:
+        """True while the Alert chip is on Visual (the orange glow)."""
+        with self._lock:
+            return self._alert_mode == "visual"
+
+    def _note_visual_cue(self) -> None:
+        """
+        Center-icon cue. Only while the app is in the orange Visual alert.
+
+        The monitor already waits for an orange peak. This check is the
+        last gate so a cue cannot land after the glow has turned off.
+        """
+        with self._lock:
+            if self._alert_mode != "visual" or not self._alert_active:
+                return
+            cue_listeners = list(self._visual_alert_cue_listeners)
+        for cb in cue_listeners:
+            try:
+                cb()
+            except Exception:
+                pass
 
     def _note_alert_active(self, active: bool) -> None:
         """Latch / clear the live Alert flag for Visual glow and Sound."""
@@ -2155,6 +2278,16 @@ class EyeRhythmEngine:
         """
         self._visual_alert_listeners.append(callback)
 
+    def on_visual_alert_cue(self, callback) -> None:
+        """
+        Register a callback() for each Visual-mode screen cue.
+
+        Fires on the in-app orange peak (about three times a minute) while
+        the low-ORI latch holds and the chip is on Visual. Used for the
+        multi-monitor icon overlay. It does not fire while the app is blue.
+        """
+        self._visual_alert_cue_listeners.append(callback)
+
     def on_alert_active_change(self, callback) -> None:
         """
         Register a callback(bool) when the low-ORI Alert latch turns on or off.
@@ -2176,6 +2309,10 @@ class EyeRhythmEngine:
         with self._lock:
             wanted = bool(self._alert_active) and self._alert_mode == "visual"
             listeners = list(self._visual_alert_listeners)
+        if wanted:
+            # Same instant the UI adds the orange glow, so the icon peak
+            # lines up with the logo turning orange.
+            self._alert.anchor_visual_orange()
         for cb in listeners:
             try:
                 cb(wanted)

@@ -97,7 +97,7 @@ export function ControlsBar({ state }: Props) {
         pulse={alertPulse ? "red" : state.alert_active ? "orange" : null}
         onClick={() => void flip("alert")}
         disabled={busy === "alert"}
-        title={`Alert is always on. Click to switch Visual (quiet orange pulse) or Sound (a short tone each minute) after ORI stays below ${Math.round(state.ori_threshold ?? 50)} for ${Math.round(state.alert_low_minutes ?? 3)} min in the last 5.`}
+        title={`Alert is always on. Click to switch Visual (orange pulse + translucent icon on every screen each minute) or Sound (a short tone each minute) after ORI stays below ${Math.round(state.ori_threshold ?? 50)} for ${Math.round(state.alert_low_minutes ?? 3)} min in the last 5.`}
       />
       <ToggleChip
         label="Practice"

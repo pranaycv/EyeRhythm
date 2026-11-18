@@ -8,7 +8,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchAudit,
   fetchCameras,
+  fetchPreferences,
   fetchSettings,
+  savePreferences,
   saveSettings,
   selectCamera,
   type AuditEntry,
@@ -35,6 +37,8 @@ export function SettingsPanel() {
   const [cameras, setCameras] = useState<CameraOption[]>([]);
   const [cameraIndex, setCameraIndex] = useState<CameraChoice | null>(null);
   const [cameraBusy, setCameraBusy] = useState(false);
+  const [skipStartup, setSkipStartup] = useState(false);
+  const skipSaveGen = useRef(0);
 
   const reloadAudit = useCallback(() => {
     void fetchAudit(8)
@@ -65,6 +69,16 @@ export function SettingsPanel() {
       })
       .catch(() => {
         /* no camera list */
+      });
+    void fetchPreferences()
+      .then((prefs) => {
+        // A click that already started must not be overwritten by this fetch.
+        if (!cancelled && skipSaveGen.current === 0) {
+          setSkipStartup(Boolean(prefs.skip_startup_screens));
+        }
+      })
+      .catch(() => {
+        /* default: startup screens stay on */
       });
     return () => {
       cancelled = true;
@@ -115,6 +129,21 @@ export function SettingsPanel() {
       .finally(() => setRestoring(false));
   };
 
+  const onSkipStartup = () => {
+    const next = !skipStartup;
+    const gen = ++skipSaveGen.current;
+    setSkipStartup(next);
+    void savePreferences({ skip_startup_screens: next })
+      .then((prefs) => {
+        if (skipSaveGen.current !== gen) return;
+        setSkipStartup(Boolean(prefs.skip_startup_screens));
+      })
+      .catch(() => {
+        if (skipSaveGen.current !== gen) return;
+        setSkipStartup(!next);
+      });
+  };
+
   const onCameraChange = (choice: CameraChoice) => {
     if (cameraBusy) return;
     setCameraBusy(true);
@@ -142,6 +171,31 @@ export function SettingsPanel() {
           {restoring ? "Restoring…" : "Restore defaults"}
         </button>
       </div>
+      <section className="settings__group" aria-labelledby="settings-startup">
+        <h3 id="settings-startup" className="settings__group-title">
+          Startup
+        </h3>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={skipStartup}
+          className={`settings__switch${skipStartup ? " is-on" : ""}`}
+          onClick={onSkipStartup}
+        >
+          <span className="settings__switch-track" aria-hidden>
+            <span className="settings__switch-knob" />
+          </span>
+          <span className="settings__check-copy">
+            <span className="settings__name">Skip startup screens</span>
+            <p className="settings__help">
+              Opens the dashboard directly the next time EyesRhythm starts.
+              The comfort check and the Before you start notes stay off. If
+              several cameras are connected and none is chosen yet, that
+              camera question still appears once.
+            </p>
+          </span>
+        </button>
+      </section>
       {cameras.length > 0 ? (
         <label className="settings__field">
           <div className="settings__row">
@@ -228,8 +282,10 @@ export function SettingsPanel() {
           />
           <p className="settings__help">
             How many minutes of low ORI in the last 5 must accumulate before
-            Alert beeps (default 3). This is not how long the sound stays on.
-            1 beeps sooner; 5 waits for almost the whole Trace window.
+            Alert fires (default 3). Visual flashes a translucent icon on every
+            screen when the app turns orange, about three times a minute; Sound
+            plays a short tone. 1 fires sooner;
+            5 waits for almost the whole Trace window.
           </p>
         </label>
       </section>

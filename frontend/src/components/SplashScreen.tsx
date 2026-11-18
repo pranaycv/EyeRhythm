@@ -95,6 +95,8 @@ const NOTICES = [
 
 interface Props {
   onDone: (comfort?: EyeComfortId | null) => void;
+  /** Camera question only. Comfort check and notices are skipped. */
+  cameraOnly?: boolean;
 }
 
 function formatRemain(ms: number): string {
@@ -104,7 +106,7 @@ function formatRemain(ms: number): string {
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
 
-export function SplashScreen({ onDone }: Props) {
+export function SplashScreen({ onDone, cameraOnly = false }: Props) {
   const version = useAppVersion();
   const [step, setStep] = useState<SplashStep>("loading");
   const [comfort, setComfort] = useState<EyeComfortId | null>(null);
@@ -142,6 +144,14 @@ export function SplashScreen({ onDone }: Props) {
       setCameraBusy(false);
     }
   }, [cameraIndex, cameraBusy]);
+
+  const exitQuiet = useCallback(() => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    void setSplashLayout(false).finally(() => {
+      onDoneRef.current(null);
+    });
+  }, []);
 
   const finish = useCallback(async () => {
     if (doneRef.current) return;
@@ -186,17 +196,21 @@ export function SplashScreen({ onDone }: Props) {
         }
         if (payload.pick_required && list.length > 1) {
           setStep("camera");
+        } else if (cameraOnly) {
+          exitQuiet();
         } else {
           setStep("comfort");
         }
       })
       .catch(() => {
-        if (!cancelled) setStep("comfort");
+        if (cancelled) return;
+        if (cameraOnly) exitQuiet();
+        else setStep("comfort");
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [cameraOnly, exitQuiet]);
 
   useEffect(() => {
     let cancelled = false;
@@ -221,8 +235,13 @@ export function SplashScreen({ onDone }: Props) {
 
   const advanceFromCamera = useCallback(async () => {
     const ok = await confirmCamera();
-    if (ok) setStep("comfort");
-  }, [confirmCamera]);
+    if (!ok) return;
+    if (cameraOnly) {
+      await finish();
+      return;
+    }
+    setStep("comfort");
+  }, [cameraOnly, confirmCamera, finish]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

@@ -136,6 +136,7 @@ class PreferencesPatch(BaseModel):
     alert_mode: str | None = None
     ontop: bool | None = None
     eye_comfort: str | None = None
+    skip_startup_screens: bool | None = None
     dock: bool | None = None
     camera_index: int | None = None
     camera_mode: str | None = None

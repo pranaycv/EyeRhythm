@@ -18,6 +18,7 @@ File (local only, never uploaded)::
 from __future__ import annotations
 
 import json
+import os
 import threading
 from copy import deepcopy
 from pathlib import Path
@@ -80,6 +81,8 @@ _DEFAULTS: dict[str, Any] = {
     "camera_index": -1,
     # "single" = one desk webcam; "hybrid" = every desk webcam except phones.
     "camera_mode": "single",
+    # Skip the comfort check and the “Before you start” notes.
+    "skip_startup_screens": False,
 }
 
 # One lock + in-memory copy so the UI and engine can read/write safely.
@@ -191,6 +194,9 @@ def _sanitize(raw: dict[str, Any]) -> dict[str, Any]:
     else:
         data["camera_mode"] = "single"
 
+    if "skip_startup_screens" in raw:
+        data["skip_startup_screens"] = bool(raw["skip_startup_screens"])
+
     return data
 
 
@@ -237,15 +243,23 @@ def save(partial: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]
         current = _sanitize(current)
         _cache = current
         try:
-            PREFS_FILE.parent.mkdir(parents=True, exist_ok=True)
-            PREFS_FILE.write_text(
-                json.dumps(current, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
+            _write_prefs(current)
         except OSError:
             # Never crash the app over preferences I/O.
             pass
         return deepcopy(current)
+
+
+def _write_prefs(current: dict[str, Any]) -> None:
+    """Replace the prefs file and flush it so a quit cannot drop the last click."""
+    PREFS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(current, indent=2, sort_keys=True) + "\n"
+    tmp = PREFS_FILE.with_suffix(".json.tmp")
+    with tmp.open("w", encoding="utf-8") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp, PREFS_FILE)
 
 
 def get_avatar() -> str:
